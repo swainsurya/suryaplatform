@@ -612,16 +612,18 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
                 <HelpCircle className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
                 <span>Rules</span>
               </button>
-
-              <button
-                type="button"
-                onClick={() => setShowSubmitModal(true)}
-                className="flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold text-xs sm:text-sm shadow-xs transition-all cursor-pointer"
-              >
-                <Send className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                <span>Submit</span>
-              </button>
             </div>
+
+            {/* Submit Button (Visible on ALL devices including mobile) */}
+            <button
+              type="button"
+              onClick={() => setShowSubmitModal(true)}
+              className="flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold text-xs sm:text-sm shadow-xs transition-all cursor-pointer shrink-0"
+              title="Submit Exam & View Final Scorecard"
+            >
+              <Send className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              <span>Submit</span>
+            </button>
 
           </div>
 
@@ -1103,13 +1105,26 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
               onSelectQuestion={handleNavigateQuestion}
             />
 
-            <button
-              type="button"
-              onClick={() => setShowMobilePalette(false)}
-              className="w-full py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
-            >
-              Close Navigator
-            </button>
+            <div className="flex items-center gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => setShowMobilePalette(false)}
+                className="flex-1 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer"
+              >
+                Close Navigator
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowMobilePalette(false);
+                  setShowSubmitModal(true);
+                }}
+                className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white text-xs font-bold shadow-xs transition-all cursor-pointer flex items-center justify-center gap-1.5"
+              >
+                <Send className="w-3.5 h-3.5" />
+                <span>Submit Exam</span>
+              </button>
+            </div>
           </div>
         </div>
       )}
