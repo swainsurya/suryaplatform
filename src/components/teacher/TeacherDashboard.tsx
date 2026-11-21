@@ -12,12 +12,17 @@ import {
   ExternalLink,
   Layers,
   Award,
-  Sparkles
+  Sparkles,
+  Database,
+  AlertTriangle,
+  CheckCircle2,
+  RefreshCw
 } from 'lucide-react';
 import { Exam, ExamSubmission } from '../../types/exam';
 import { ExamEditor } from './ExamEditor';
 import { ParticipantScorecards } from './ParticipantScorecards';
-import { deleteExam, saveExam } from '../../services/storage';
+import { useExamStore } from '../../store/useExamStore';
+import { testFirestoreConnection } from '../../services/firebase';
 
 interface TeacherDashboardProps {
   exams: Exam[];
@@ -32,10 +37,24 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
   onRefreshData,
   onStudentPortalPreview
 }) => {
+  const { saveExam, deleteExam } = useExamStore();
+
   const [activeTab, setActiveTab] = useState<'exams' | 'submissions' | 'editor'>('exams');
   const [editingExam, setEditingExam] = useState<Exam | null>(null);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
   const [shareModalExam, setShareModalExam] = useState<Exam | null>(null);
+  const [dbTestStatus, setDbTestStatus] = useState<{ testing: boolean; message: string; connected?: boolean; details?: string } | null>(null);
+
+  const handleTestDatabase = async () => {
+    setDbTestStatus({ testing: true, message: 'Testing connection to Firebase Firestore...' });
+    const result = await testFirestoreConnection();
+    setDbTestStatus({
+      testing: false,
+      message: result.message,
+      connected: result.connected,
+      details: result.details
+    });
+  };
 
   const handleCreateNew = () => {
     setEditingExam(null);
@@ -47,16 +66,16 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
     setActiveTab('editor');
   };
 
-  const handleDelete = (id: string, title: string) => {
+  const handleDelete = async (id: string, title: string) => {
     if (window.confirm(`Are you sure you want to delete the exam "${title}"? This cannot be undone.`)) {
-      deleteExam(id);
+      await deleteExam(id);
       onRefreshData();
     }
   };
 
-  const handleToggleStatus = (exam: Exam) => {
+  const handleToggleStatus = async (exam: Exam) => {
     const updated = { ...exam, isActive: !exam.isActive };
-    saveExam(updated);
+    await saveExam(updated);
     onRefreshData();
   };
 
@@ -85,29 +104,81 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
       {/* Top Banner & Quick Navigation */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white p-5 sm:p-8 rounded-2xl sm:rounded-3xl shadow-xl">
         <div className="space-y-1.5">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 backdrop-blur-xs text-indigo-300 text-xs font-semibold">
+          <div className="inline-flex flex-wrap items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 backdrop-blur-xs text-indigo-300 text-xs font-semibold">
             <Sparkles className="w-3.5 h-3.5" />
             <span>Teacher Administration</span>
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 ml-1.5 animate-pulse" />
+            <span className="text-[10px] text-emerald-300 font-mono">Firebase DB: suryaplatform-b87ab</span>
           </div>
+
           <h1 className="text-xl sm:text-3xl font-black tracking-tight">
             Teacher Exam Studio
           </h1>
           <p className="text-xs sm:text-sm text-slate-300 max-w-xl">
-            Design MCQs from text & PDFs, configure timers, distribute shareable test links, and analyze student scorecards in real-time.
+            Design MCQs from text & PDFs, configure timers, distribute shareable test links, and analyze student scorecards in real-time. Exams and questions are stored in Firebase Firestore.
           </p>
         </div>
 
-        <div className="flex items-center gap-2 sm:gap-3">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+          <button
+            type="button"
+            onClick={handleTestDatabase}
+            disabled={dbTestStatus?.testing}
+            className="flex items-center justify-center gap-1.5 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl sm:rounded-2xl bg-white/10 hover:bg-white/20 text-white font-semibold text-xs border border-white/20 transition-all cursor-pointer"
+            title="Verify live connection with Firebase Firestore"
+          >
+            {dbTestStatus?.testing ? (
+              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <Database className="w-3.5 h-3.5 text-indigo-300" />
+            )}
+            <span>{dbTestStatus?.testing ? 'Testing...' : 'Test DB Sync'}</span>
+          </button>
+
           <button
             type="button"
             onClick={handleCreateNew}
-            className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 sm:px-5 py-2.5 sm:py-3 rounded-xl sm:rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs sm:text-sm shadow-lg shadow-indigo-600/30 transition-all cursor-pointer"
+            className="flex items-center justify-center gap-2 px-4 sm:px-5 py-2.5 sm:py-3 rounded-xl sm:rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs sm:text-sm shadow-lg shadow-indigo-600/30 transition-all cursor-pointer"
           >
             <Plus className="w-4 h-4 stroke-[3]" />
             <span>Create New Exam</span>
           </button>
         </div>
       </div>
+
+      {/* Database Diagnostic Status Banner */}
+      {dbTestStatus && (
+        <div className={`p-4 rounded-2xl border text-xs animate-fadeIn ${
+          dbTestStatus.connected 
+            ? 'bg-emerald-50 border-emerald-200 text-emerald-900' 
+            : 'bg-amber-50 border-amber-200 text-amber-900'
+        }`}>
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-start gap-2.5">
+              {dbTestStatus.connected ? (
+                <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+              ) : (
+                <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+              )}
+              <div className="space-y-1">
+                <p className="font-bold">{dbTestStatus.message}</p>
+                {dbTestStatus.details && (
+                  <p className="text-[11px] text-slate-700 font-mono bg-white/80 p-2 rounded-lg border border-slate-200/60 mt-1">
+                    {dbTestStatus.details}
+                  </p>
+                )}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setDbTestStatus(null)}
+              className="text-slate-400 hover:text-slate-600 p-1 cursor-pointer shrink-0"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Primary Tab Bar */}
       {activeTab !== 'editor' && (
@@ -307,7 +378,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
         </div>
       )}
 
-      {/* Share Modal Dialog (Mobile Optimized) */}
+      {/* Share Modal Dialog */}
       {shareModalExam && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/50 backdrop-blur-xs animate-fadeIn overflow-y-auto">
           <div className="bg-white rounded-2xl sm:rounded-3xl max-w-md w-full p-5 sm:p-6 shadow-2xl border border-slate-200 space-y-4 sm:space-y-5 my-auto max-h-[92vh] overflow-y-auto">

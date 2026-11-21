@@ -1,197 +1,58 @@
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
 import { Navbar } from './components/common/Navbar';
 import { TeacherLogin } from './components/teacher/TeacherLogin';
 import { TeacherDashboard } from './components/teacher/TeacherDashboard';
 import { StudentHome } from './components/student/StudentHome';
 import { ExamScreen } from './components/student/ExamScreen';
 import { StudentScorecard } from './components/student/StudentScorecard';
-import { 
-  getExams, 
-  getSubmissions, 
-  saveSubmission,
-  isTeacherAuthenticated, 
-  setTeacherAuthenticated, 
-  resetToDemoData, 
-  initStorage 
-} from './services/storage';
-import { Exam, ExamSubmission, QuestionAnswer } from './types/exam';
+import { useExamStore } from './store/useExamStore';
 import { Lock } from 'lucide-react';
 
 export function App() {
-  const [currentView, setCurrentView] = useState<'student' | 'teacher'>('student');
-  const [isTeacherAuth, setIsTeacherAuth] = useState<boolean>(false);
-  const [exams, setExams] = useState<Exam[]>([]);
-  const [submissions, setSubmissions] = useState<ExamSubmission[]>([]);
-  const [urlExamCode, setUrlExamCode] = useState<string>('');
+  const {
+    exams,
+    submissions,
+    currentView,
+    isTeacherAuth,
+    activeTestSession,
+    activeScorecard,
+    urlExamCode,
+    initStore,
+    setCurrentView,
+    setUrlExamCode,
+    loginTeacher,
+    startExam,
+    finishExam,
+    retakeExam,
+    exitToHome,
+  } = useExamStore();
 
-  // Student test session states
-  const [activeTestSession, setActiveTestSession] = useState<{
-    exam: Exam;
-    studentName: string;
-    studentRollNumber?: string;
-    studentEmail?: string;
-  } | null>(null);
-
-  const [activeScorecard, setActiveScorecard] = useState<{
-    submission: ExamSubmission;
-    exam: Exam;
-  } | null>(null);
-
-  // Initialize and check URL parameters on initial mount
+  // Initialize store and check URL parameters on initial mount
   useEffect(() => {
-    initStorage();
-    const authenticated = isTeacherAuthenticated();
-    setIsTeacherAuth(authenticated);
-    refreshData();
+    initStore();
 
-    // Check if ?exam=CODE or ?view=teacher is present in URL
     const urlParams = new URLSearchParams(window.location.search);
-    const examParam = urlParams.get('exam') || urlParams.get('examId');
+    const examParam = urlParams.get('exam') || urlParams.get('examId') || urlParams.get('code');
     const viewParam = urlParams.get('view') || urlParams.get('portal');
 
     if (examParam) {
       setUrlExamCode(examParam.toUpperCase());
       setCurrentView('student');
-    } else if (viewParam === 'teacher' && authenticated) {
+    } else if (viewParam === 'teacher' && isTeacherAuth) {
       setCurrentView('teacher');
     }
   }, []);
 
-  const refreshData = () => {
-    setExams(getExams());
-    setSubmissions(getSubmissions());
-  };
-
-  const handleTeacherLoginSuccess = () => {
-    setIsTeacherAuth(true);
-    setCurrentView('teacher');
-  };
-
-  const handleTeacherLogout = () => {
-    setTeacherAuthenticated(false);
-    setIsTeacherAuth(false);
-    setCurrentView('student');
-  };
-
-  const handleResetData = () => {
-    if (window.confirm('Reset all exams and participant submissions to initial sample data?')) {
-      resetToDemoData();
-      refreshData();
-      setActiveTestSession(null);
-      setActiveScorecard(null);
-      alert('Application reset to sample demo data.');
-    }
-  };
-
-  const handleStudentStartExam = (
-    exam: Exam, 
-    details: { name: string; rollNumber?: string; email?: string }
-  ) => {
-    setActiveScorecard(null);
-    setActiveTestSession({
-      exam,
-      studentName: details.name,
-      studentRollNumber: details.rollNumber,
-      studentEmail: details.email,
-    });
-  };
-
-  // Securely evaluate student answers against the server/storage exam record
-  const handleExamFinish = (userAnswers: Record<string, number | null>, timeSpentSeconds: number) => {
-    if (!activeTestSession) return;
-    const completedExam = activeTestSession.exam;
-
-    let totalScore = 0;
-    let correctCount = 0;
-    let wrongCount = 0;
-    let skippedCount = 0;
-
-    const answersList: QuestionAnswer[] = completedExam.questions.map((q) => {
-      const chosen = userAnswers[q.id] ?? null;
-      const isUnanswered = chosen === null;
-      const isCorrect = chosen !== null && chosen === q.correctOptionIndex;
-
-      let marksAwarded = 0;
-      if (isCorrect) {
-        marksAwarded = q.marks || 1;
-        correctCount++;
-        totalScore += marksAwarded;
-      } else if (isUnanswered) {
-        skippedCount++;
-        marksAwarded = 0;
-      } else {
-        wrongCount++;
-        const deduction = completedExam.negativeMarking || 0;
-        marksAwarded = -deduction;
-        totalScore = Math.max(0, totalScore - deduction);
-      }
-
-      return {
-        questionId: q.id,
-        selectedOptionIndex: chosen,
-        isCorrect,
-        marksAwarded,
-      };
-    });
-
-    const maxScore = completedExam.questions.reduce((sum, q) => sum + (q.marks || 1), 0);
-    const finalPercentage = maxScore > 0 ? (totalScore / maxScore) * 100 : 0;
-    const isPassed = finalPercentage >= completedExam.passingPercentage;
-
-    const submission: ExamSubmission = {
-      id: `sub-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-      examId: completedExam.id,
-      examCode: completedExam.code,
-      examTitle: completedExam.title,
-      studentName: activeTestSession.studentName.trim(),
-      studentRollNumber: activeTestSession.studentRollNumber?.trim() || undefined,
-      studentEmail: activeTestSession.studentEmail?.trim() || undefined,
-      startedAt: new Date(Date.now() - timeSpentSeconds * 1000).toISOString(),
-      submittedAt: new Date().toISOString(),
-      timeTakenSeconds: timeSpentSeconds,
-      totalQuestions: completedExam.questions.length,
-      attemptedCount: correctCount + wrongCount,
-      correctCount,
-      wrongCount,
-      skippedCount,
-      totalScore: Number(totalScore.toFixed(2)),
-      maxScore,
-      percentage: Number(finalPercentage.toFixed(2)),
-      isPassed,
-      answers: answersList,
-    };
-
-    saveSubmission(submission);
-    setActiveTestSession(null);
-    setActiveScorecard({
-      submission,
-      exam: completedExam,
-    });
-    refreshData();
-  };
-
   const handleTestRunFromTeacher = (examCode: string) => {
     setCurrentView('student');
     setUrlExamCode(examCode);
-    setActiveScorecard(null);
-    setActiveTestSession(null);
+    exitToHome();
   };
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans selection:bg-indigo-500 selection:text-white">
       {/* Global Navigation Bar (Hidden while taking an exam) */}
-      {!activeTestSession && (
-        <Navbar
-          currentView={currentView}
-          onViewChange={(view) => {
-            setCurrentView(view);
-            setActiveScorecard(null);
-          }}
-          isTeacherAuth={isTeacherAuth}
-          onTeacherLogout={handleTeacherLogout}
-          onResetData={handleResetData}
-        />
-      )}
+      {!activeTestSession && <Navbar />}
 
       {/* Main Content Area */}
       <main className="flex-1">
@@ -202,27 +63,16 @@ export function App() {
             studentName={activeTestSession.studentName}
             studentRollNumber={activeTestSession.studentRollNumber}
             studentEmail={activeTestSession.studentEmail}
-            onFinishExam={handleExamFinish}
-            onCancel={() => setActiveTestSession(null)}
+            onFinishExam={finishExam}
+            onCancel={exitToHome}
           />
         ) : activeScorecard ? (
           /* Case 2: Student just finished and is viewing their scorecard */
           <StudentScorecard
             submission={activeScorecard.submission}
             exam={activeScorecard.exam}
-            onRetake={() => {
-              setActiveTestSession({
-                exam: activeScorecard.exam,
-                studentName: activeScorecard.submission.studentName,
-                studentRollNumber: activeScorecard.submission.studentRollNumber,
-                studentEmail: activeScorecard.submission.studentEmail,
-              });
-              setActiveScorecard(null);
-            }}
-            onGoHome={() => {
-              setActiveScorecard(null);
-              setUrlExamCode('');
-            }}
+            onRetake={retakeExam}
+            onGoHome={exitToHome}
           />
         ) : currentView === 'teacher' ? (
           /* Case 3: Teacher Portal - strictly guarded */
@@ -230,12 +80,12 @@ export function App() {
             <TeacherDashboard
               exams={exams}
               submissions={submissions}
-              onRefreshData={refreshData}
+              onRefreshData={() => {}}
               onStudentPortalPreview={handleTestRunFromTeacher}
             />
           ) : (
             <TeacherLogin
-              onSuccess={handleTeacherLoginSuccess}
+              onSuccess={loginTeacher}
               onGoToStudent={() => setCurrentView('student')}
             />
           )
@@ -244,7 +94,7 @@ export function App() {
           <StudentHome
             exams={exams}
             initialExamCode={urlExamCode}
-            onStartExam={handleStudentStartExam}
+            onStartExam={startExam}
           />
         )}
       </main>
@@ -257,7 +107,7 @@ export function App() {
               <span>SuryaPlatform Exam Suite</span>
               <span className="hidden sm:inline">•</span>
               <span className="text-[11px] sm:text-xs text-slate-600">
-                Secure Online Assessment & Analytics
+                Secure Assessment System & Cloud Database
               </span>
             </div>
             
@@ -265,6 +115,7 @@ export function App() {
               <span>Automated Timer</span>
               <span>•</span>
               <span>Instant Scorecards</span>
+              
               {!isTeacherAuth && (
                 <>
                   <span>•</span>

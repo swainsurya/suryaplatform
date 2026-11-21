@@ -17,7 +17,7 @@ import { Exam, Question } from '../../types/exam';
 import { McqBuilderManual } from './McqBuilderManual';
 import { McqBuilderText } from './McqBuilderText';
 import { McqBuilderPdf } from './McqBuilderPdf';
-import { saveExam } from '../../services/storage';
+import { useExamStore } from '../../store/useExamStore';
 
 interface ExamEditorProps {
   initialExam?: Exam | null;
@@ -30,6 +30,7 @@ export const ExamEditor: React.FC<ExamEditorProps> = ({
   onSaveSuccess,
   onCancel
 }) => {
+  const { saveExam } = useExamStore();
   const [title, setTitle] = useState(initialExam?.title || '');
   const [description, setDescription] = useState(
     initialExam?.description || 'Read all questions carefully. Choose the single best answer. The timer will auto-submit upon expiration.'
@@ -55,6 +56,8 @@ export const ExamEditor: React.FC<ExamEditorProps> = ({
   const [questions, setQuestions] = useState<Question[]>(initialExam?.questions || []);
   const [activeTab, setActiveTab] = useState<'manual' | 'text' | 'pdf'>('manual');
   const [validationError, setValidationError] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<string | null>(null);
 
   // Add questions from any sub-builder
   const handleAddQuestion = (q: Question) => {
@@ -79,7 +82,7 @@ export const ExamEditor: React.FC<ExamEditorProps> = ({
 
   const totalCalculatedMarks = questions.reduce((sum, q) => sum + (q.marks || 1), 0);
 
-  const handleSaveExam = (e: React.FormEvent) => {
+  const handleSaveExam = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) {
       setValidationError('Please provide an Exam Title.');
@@ -114,8 +117,20 @@ export const ExamEditor: React.FC<ExamEditorProps> = ({
       questions,
     };
 
-    saveExam(examData);
-    onSaveSuccess(examData);
+    setIsSaving(true);
+    setSaveStatus('Saving exam with MCQs to Firebase database...');
+    try {
+      await saveExam(examData);
+      setSaveStatus('Exam & questions successfully saved to Firebase!');
+      setTimeout(() => {
+        onSaveSuccess(examData);
+      }, 400);
+    } catch (err) {
+      console.error('Error saving exam:', err);
+      onSaveSuccess(examData);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -152,13 +167,30 @@ export const ExamEditor: React.FC<ExamEditorProps> = ({
           <button
             type="button"
             onClick={handleSaveExam}
-            className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-4 sm:px-5 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm rounded-xl transition-all cursor-pointer"
+            disabled={isSaving}
+            className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-4 sm:px-5 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 shadow-sm rounded-xl transition-all cursor-pointer"
           >
-            <Save className="w-4 h-4" />
-            <span>Publish Exam</span>
+            {isSaving ? (
+              <>
+                <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                <span>Saving to Firebase...</span>
+              </>
+            ) : (
+              <>
+                <Save className="w-4 h-4" />
+                <span>Publish Exam</span>
+              </>
+            )}
           </button>
         </div>
       </div>
+
+      {saveStatus && (
+        <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold flex items-center gap-2 animate-fadeIn">
+          <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+          <span>{saveStatus}</span>
+        </div>
+      )}
 
       {validationError && (
         <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-medium flex items-center gap-2">

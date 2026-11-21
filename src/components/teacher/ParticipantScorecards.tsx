@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import { Exam, ExamSubmission } from '../../types/exam';
 import { ScorecardDetailModal } from './ScorecardDetailModal';
-import { deleteSubmission } from '../../services/storage';
+import { useExamStore } from '../../store/useExamStore';
 
 interface ParticipantScorecardsProps {
   exams: Exam[];
@@ -28,6 +28,7 @@ export const ParticipantScorecards: React.FC<ParticipantScorecardsProps> = ({
   submissions,
   onSubmissionsUpdated,
 }) => {
+  const { deleteSubmission } = useExamStore();
   const [selectedExamId, setSelectedExamId] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [activeModalSubmission, setActiveModalSubmission] = useState<ExamSubmission | null>(null);
@@ -53,9 +54,9 @@ export const ParticipantScorecards: React.FC<ParticipantScorecardsProps> = ({
     ? Math.max(...filteredSubmissions.map(s => s.percentage))
     : 0;
 
-  const handleDelete = (id: string, studentName: string) => {
+  const handleDelete = async (id: string, studentName: string) => {
     if (window.confirm(`Are you sure you want to remove the scorecard for ${studentName}?`)) {
-      deleteSubmission(id);
+      await deleteSubmission(id);
       onSubmissionsUpdated();
     }
   };

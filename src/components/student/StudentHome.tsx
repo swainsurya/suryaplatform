@@ -12,6 +12,7 @@ import {
   Hash
 } from 'lucide-react';
 import { Exam } from '../../types/exam';
+import { useExamStore } from '../../store/useExamStore';
 
 interface StudentHomeProps {
   exams: Exam[];
@@ -25,48 +26,101 @@ export const StudentHome: React.FC<StudentHomeProps> = ({
   initialExamCode,
   onStartExam,
 }) => {
+  const { findExamByCode } = useExamStore();
   const [examCodeInput, setExamCodeInput] = useState<string>(initialExamCode || '');
   const [selectedExam, setSelectedExam] = useState<Exam | null>(null);
-  const [studentName, setStudentName] = useState<string>('');
+  const [matchedExam, setMatchedExam] = useState<Exam | null>(null);
+  const [studentName, setStudentName] = useState<string>(() => {
+    return localStorage.getItem('surya_student_name') || '';
+  });
   const [studentRoll, setStudentRoll] = useState<string>('');
   const [studentEmail, setStudentEmail] = useState<string>('');
   const [error, setError] = useState<string>('');
   const [isBriefingOpen, setIsBriefingOpen] = useState<boolean>(false);
+  const [isSearchingCode, setIsSearchingCode] = useState<boolean>(false);
 
-  // Auto-detect exam if code provided in prop / URL
+  // Synchronize when initialExamCode is provided (e.g. from URL ?exam=EXAM-6724)
   useEffect(() => {
     if (initialExamCode) {
-      const match = exams.find(e => e.code.toUpperCase() === initialExamCode.toUpperCase());
-      if (match) {
-        setSelectedExam(match);
-        setIsBriefingOpen(true);
-      }
+      setExamCodeInput(initialExamCode);
+      findExamByCode(initialExamCode).then((match) => {
+        if (match) {
+          setMatchedExam(match);
+          setSelectedExam(match);
+        }
+      });
     }
   }, [initialExamCode, exams]);
 
-  const handleJoinByCode = (e: React.FormEvent) => {
+  // Live auto-verification as student types or pastes the code
+  useEffect(() => {
+    const raw = examCodeInput.trim();
+    if (!raw || raw.length < 3) {
+      setMatchedExam(null);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      try {
+        const found = await findExamByCode(raw);
+        if (found) {
+          setMatchedExam(found);
+          setSelectedExam(found);
+          setError('');
+        } else {
+          setMatchedExam(null);
+        }
+      } catch {
+        setMatchedExam(null);
+      }
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [examCodeInput, exams]);
+
+  const handleStartExam = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
-    const cleanCode = examCodeInput.trim().toUpperCase();
-    if (!cleanCode) {
-      setError('Please enter an Exam Code.');
+    if (!studentName.trim()) {
+      setError('Please enter your full name to begin the exam.');
       return;
     }
 
-    const match = exams.find(e => e.code.toUpperCase() === cleanCode);
-    if (!match) {
-      setError(`Exam with code "${cleanCode}" was not found. Please verify the code.`);
+    let targetExam = matchedExam || selectedExam;
+    if (!targetExam) {
+      const cleanCode = examCodeInput.trim();
+      if (!cleanCode) {
+        setError('Please enter an Exam Code.');
+        return;
+      }
+
+      setIsSearchingCode(true);
+      try {
+        targetExam = await findExamByCode(cleanCode);
+      } finally {
+        setIsSearchingCode(false);
+      }
+    }
+
+    if (!targetExam) {
+      setError(`Exam with code "${examCodeInput.trim()}" was not found in the database. Please verify the code with your teacher.`);
       return;
     }
 
-    if (!match.isActive) {
-      setError('This exam is currently closed or inactive. Please contact your teacher.');
+    if (!targetExam.isActive) {
+      setError(`Exam "${targetExam.title}" is currently closed or inactive. Please contact your instructor.`);
       return;
     }
 
-    setSelectedExam(match);
-    setIsBriefingOpen(true);
+    // Save student name to localStorage
+    localStorage.setItem('surya_student_name', studentName.trim());
+
+    onStartExam(targetExam, {
+      name: studentName.trim(),
+      rollNumber: studentRoll.trim() || undefined,
+      email: studentEmail.trim() || undefined,
+    });
   };
 
   const handleCardSelect = (exam: Exam) => {
@@ -75,6 +129,7 @@ export const StudentHome: React.FC<StudentHomeProps> = ({
       return;
     }
     setSelectedExam(exam);
+    setMatchedExam(exam);
     setExamCodeInput(exam.code);
     setIsBriefingOpen(true);
   };
@@ -86,6 +141,9 @@ export const StudentHome: React.FC<StudentHomeProps> = ({
       return;
     }
     if (!selectedExam) return;
+
+    localStorage.setItem('surya_student_name', studentName.trim());
+    setIsBriefingOpen(false);
 
     onStartExam(selectedExam, {
       name: studentName.trim(),
@@ -120,21 +178,86 @@ export const StudentHome: React.FC<StudentHomeProps> = ({
             Join Exam via Code
           </h3>
 
-          <form onSubmit={handleJoinByCode} className="space-y-3 sm:space-y-4">
-            <div className="relative">
+          <form onSubmit={handleStartExam} className="space-y-3 sm:space-y-4">
+            <div>
+              <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">
+                Exam Code *
+              </label>
+              <div className="relative">
+                <input
+                  type="text"
+                  value={examCodeInput}
+                  onChange={(e) => {
+                    setExamCodeInput(e.target.value);
+                    if (error) setError('');
+                  }}
+                  placeholder="e.g. EXAM-6724 or 6724"
+                  className="w-full text-center px-4 py-2.5 sm:py-3 text-sm sm:text-base font-mono font-extrabold uppercase tracking-widest bg-slate-50 border border-slate-300 rounded-xl sm:rounded-2xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 placeholder:font-sans placeholder:tracking-normal placeholder:font-normal placeholder:text-slate-400"
+                />
+              </div>
+            </div>
+
+            {/* Live Auto-Verified Exam Preview Chip */}
+            {matchedExam && (
+              <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-900 text-xs animate-fadeIn space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold flex items-center gap-1.5">
+                    <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span>{matchedExam.title}</span>
+                  </span>
+                  <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-emerald-200/80 text-emerald-800">
+                    {matchedExam.code}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 text-[11px] text-emerald-700 pt-0.5">
+                  <span>⏱ {matchedExam.durationMinutes} Mins</span>
+                  <span>•</span>
+                  <span>📝 {matchedExam.questions.length} MCQs</span>
+                  <span>•</span>
+                  <span>🎯 Pass: {matchedExam.passingPercentage}%</span>
+                </div>
+              </div>
+            )}
+
+            <div>
+              <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">
+                Student Full Name *
+              </label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                  <User className="w-4 h-4" />
+                </div>
+                <input
+                  type="text"
+                  value={studentName}
+                  onChange={(e) => {
+                    setStudentName(e.target.value);
+                    if (error) setError('');
+                  }}
+                  placeholder="Enter your full name"
+                  className="w-full pl-9 pr-3 py-2.5 text-xs sm:text-sm bg-slate-50 border border-slate-300 rounded-xl sm:rounded-2xl focus:bg-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
               <input
                 type="text"
-                value={examCodeInput}
-                onChange={(e) => {
-                  setExamCodeInput(e.target.value.toUpperCase());
-                  if (error) setError('');
-                }}
-                placeholder="e.g. REACT-101"
-                className="w-full text-center px-4 py-3 sm:py-3.5 text-sm sm:text-base font-mono font-extrabold uppercase tracking-widest bg-slate-50 border border-slate-300 rounded-xl sm:rounded-2xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 placeholder:font-sans placeholder:tracking-normal placeholder:font-normal placeholder:text-slate-400"
+                value={studentRoll}
+                onChange={(e) => setStudentRoll(e.target.value)}
+                placeholder="Roll / ID (optional)"
+                className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              />
+              <input
+                type="email"
+                value={studentEmail}
+                onChange={(e) => setStudentEmail(e.target.value)}
+                placeholder="Email (optional)"
+                className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:outline-none focus:ring-1 focus:ring-indigo-500"
               />
             </div>
 
-            {error && !isBriefingOpen && (
+            {error && (
               <div className="p-2.5 sm:p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-medium flex items-center gap-2">
                 <AlertCircle className="w-4 h-4 shrink-0" />
                 <span>{error}</span>
@@ -143,10 +266,20 @@ export const StudentHome: React.FC<StudentHomeProps> = ({
 
             <button
               type="submit"
-              className="w-full py-3 sm:py-3.5 px-4 rounded-xl sm:rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs sm:text-sm shadow-md shadow-indigo-300 transition-all flex items-center justify-center gap-2 cursor-pointer"
+              disabled={isSearchingCode}
+              className="w-full py-3 sm:py-3.5 px-4 rounded-xl sm:rounded-2xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-70 text-white font-bold text-xs sm:text-sm shadow-md shadow-indigo-300 transition-all flex items-center justify-center gap-2 cursor-pointer"
             >
-              <span>Verify & Start Exam</span>
-              <ArrowRight className="w-4 h-4" />
+              {isSearchingCode ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  <span>Looking up Exam in Cloud...</span>
+                </>
+              ) : (
+                <>
+                  <span>Start Exam Now</span>
+                  <ArrowRight className="w-4 h-4" />
+                </>
+              )}
             </button>
           </form>
         </div>
