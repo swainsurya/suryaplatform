@@ -129,20 +129,20 @@ export const McqBuilderPdf: React.FC<McqBuilderPdfProps> = ({ onAddQuestions }) 
   };
 
   return (
-    <div className="bg-white rounded-xl sm:rounded-2xl border border-slate-200 p-4 sm:p-5 shadow-xs space-y-3.5 sm:space-y-4">
+    <div className="bg-white dark:bg-slate-900 rounded-xl sm:rounded-2xl border border-slate-200 dark:border-slate-800 p-4 sm:p-5 shadow-xs space-y-3.5 sm:space-y-4 transition-colors">
       {/* Header */}
-      <div className="pb-2 border-b border-slate-100">
-        <h4 className="text-xs sm:text-sm font-bold text-slate-800 flex items-center gap-1.5">
-          <FileUp className="w-4 h-4 text-indigo-600" />
+      <div className="pb-2 border-b border-slate-100 dark:border-slate-800">
+        <h4 className="text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+          <FileUp className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
           <span>Upload PDF & Generate MCQs</span>
         </h4>
-        <p className="text-[11px] sm:text-xs text-slate-500">
+        <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400">
           Upload any PDF containing questions, past exam papers, or syllabus notes to extract MCQs automatically.
         </p>
       </div>
 
       {/* PDF Upload Zone */}
-      <div className="border-2 border-dashed border-slate-300 hover:border-indigo-400 bg-slate-50/60 hover:bg-indigo-50/20 rounded-xl sm:rounded-2xl p-4 sm:p-6 text-center transition-all">
+      <div className="border-2 border-dashed border-slate-300 dark:border-slate-700 hover:border-indigo-400 dark:hover:border-indigo-500 bg-slate-50/60 dark:bg-slate-800/40 hover:bg-indigo-50/20 dark:hover:bg-indigo-950/20 rounded-xl sm:rounded-2xl p-4 sm:p-6 text-center transition-all">
         <input
           type="file"
           id="pdf-upload"
@@ -155,14 +155,14 @@ export const McqBuilderPdf: React.FC<McqBuilderPdfProps> = ({ onAddQuestions }) 
           htmlFor="pdf-upload"
           className="cursor-pointer flex flex-col items-center justify-center gap-2"
         >
-          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-600 flex items-center justify-center shadow-xs">
+          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-indigo-50 dark:bg-indigo-950/70 border border-indigo-200 dark:border-indigo-800 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shadow-xs">
             {isLoading ? <Loader2 className="w-5 h-5 sm:w-6 sm:h-6 animate-spin" /> : <FileUp className="w-5 h-5 sm:w-6 sm:h-6" />}
           </div>
           <div>
-            <span className="text-xs sm:text-sm font-semibold text-indigo-600 hover:underline break-all">
+            <span className="text-xs sm:text-sm font-semibold text-indigo-600 dark:text-indigo-400 hover:underline break-all">
               {selectedFile ? selectedFile.name : 'Tap to upload PDF document'}
             </span>
-            <p className="text-[10px] sm:text-xs text-slate-400 mt-0.5">
+            <p className="text-[10px] sm:text-xs text-slate-400 dark:text-slate-500 mt-0.5">
               Supports question papers, syllabus, notes (.pdf)
             </p>
           </div>
@@ -174,10 +174,10 @@ export const McqBuilderPdf: React.FC<McqBuilderPdfProps> = ({ onAddQuestions }) 
         <div
           className={`p-2.5 sm:p-3 rounded-xl text-xs font-medium border flex items-center gap-2 ${
             statusMessage.type === 'success'
-              ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+              ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300'
               : statusMessage.type === 'error'
-              ? 'bg-rose-50 border-rose-200 text-rose-800'
-              : 'bg-indigo-50 border-indigo-200 text-indigo-800'
+              ? 'bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-900/50 text-rose-800 dark:text-rose-300'
+              : 'bg-indigo-50 dark:bg-indigo-950/40 border-indigo-200 dark:border-indigo-800 text-indigo-800 dark:text-indigo-300'
           }`}
         >
           {statusMessage.type === 'error' ? (
@@ -193,7 +193,7 @@ export const McqBuilderPdf: React.FC<McqBuilderPdfProps> = ({ onAddQuestions }) 
       {extractedText && (
         <div className="space-y-2.5 pt-1">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-            <label className="text-[11px] sm:text-xs font-semibold uppercase tracking-wider text-slate-600">
+            <label className="text-[11px] sm:text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300">
               Extracted Text ({extractedText.length} chars)
             </label>
             <div className="flex flex-col sm:flex-row gap-1.5 sm:gap-2">
@@ -220,24 +220,24 @@ export const McqBuilderPdf: React.FC<McqBuilderPdfProps> = ({ onAddQuestions }) 
             rows={4}
             value={extractedText}
             onChange={(e) => setExtractedText(e.target.value)}
-            className="w-full p-2.5 text-xs font-mono bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            className="w-full p-2.5 text-xs font-mono bg-slate-50 dark:bg-slate-800/80 text-slate-900 dark:text-white border border-slate-300 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500"
           />
         </div>
       )}
 
       {/* Parsed Questions List */}
       {parsedQuestions.length > 0 && (
-        <div className="pt-3 border-t border-slate-200 space-y-3">
+        <div className="pt-3 border-t border-slate-200 dark:border-slate-800 space-y-3">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <button
               type="button"
               onClick={toggleSelectAll}
-              className="text-xs font-semibold text-slate-700 flex items-center gap-1.5 hover:text-indigo-600 self-start"
+              className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5 hover:text-indigo-600 dark:hover:text-indigo-400 self-start cursor-pointer"
             >
               {selectedIds.size === parsedQuestions.length ? (
-                <CheckSquare className="w-4 h-4 text-indigo-600" />
+                <CheckSquare className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
               ) : (
-                <Square className="w-4 h-4 text-slate-400" />
+                <Square className="w-4 h-4 text-slate-400 dark:text-slate-500" />
               )}
               <span>Select All ({selectedIds.size}/{parsedQuestions.length})</span>
             </button>
@@ -262,20 +262,20 @@ export const McqBuilderPdf: React.FC<McqBuilderPdfProps> = ({ onAddQuestions }) 
                   onClick={() => toggleSelect(q.id)}
                   className={`p-3 rounded-xl border text-xs cursor-pointer transition-all ${
                     isSelected
-                      ? 'border-indigo-500 bg-indigo-50/40 ring-1 ring-indigo-500/30'
-                      : 'border-slate-200 bg-slate-50/50 hover:bg-slate-50'
+                      ? 'border-indigo-500 dark:border-indigo-500 bg-indigo-50/40 dark:bg-indigo-950/40 ring-1 ring-indigo-500/30'
+                      : 'border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 hover:bg-slate-50 dark:hover:bg-slate-800'
                   }`}
                 >
                   <div className="flex items-start gap-2">
                     <div className="mt-0.5 shrink-0">
                       {isSelected ? (
-                        <CheckSquare className="w-4 h-4 text-indigo-600" />
+                        <CheckSquare className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
                       ) : (
-                        <Square className="w-4 h-4 text-slate-400" />
+                        <Square className="w-4 h-4 text-slate-400 dark:text-slate-500" />
                       )}
                     </div>
                     <div className="flex-1 space-y-1.5 min-w-0">
-                      <p className="font-semibold text-slate-900 leading-snug">
+                      <p className="font-semibold text-slate-900 dark:text-white leading-snug">
                         {idx + 1}. {q.questionText}
                       </p>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 pl-0 sm:pl-2">
@@ -286,18 +286,18 @@ export const McqBuilderPdf: React.FC<McqBuilderPdfProps> = ({ onAddQuestions }) 
                               key={optIdx}
                               className={`px-2 py-1 rounded-md text-[11px] truncate ${
                                 isCorrect
-                                  ? 'bg-emerald-100 text-emerald-900 font-semibold border border-emerald-300'
-                                  : 'text-slate-600 bg-white border border-slate-200'
+                                  ? 'bg-emerald-100 dark:bg-emerald-950/70 text-emerald-900 dark:text-emerald-200 font-semibold border border-emerald-300 dark:border-emerald-800'
+                                  : 'text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700'
                               }`}
                             >
-                              <span className="font-mono mr-1">{String.fromCharCode(65 + optIdx)})</span>
+                              <span className="font-mono mr-1 text-slate-400">{String.fromCharCode(65 + optIdx)})</span>
                               {opt}
                             </div>
                           );
                         })}
                       </div>
                       {q.explanation && (
-                        <p className="text-[10px] sm:text-[11px] text-slate-500 italic pl-0 sm:pl-2 pt-0.5">
+                        <p className="text-[10px] sm:text-[11px] text-slate-500 dark:text-slate-400 italic pl-0 sm:pl-2 pt-0.5">
                           Note: {q.explanation}
                         </p>
                       )}

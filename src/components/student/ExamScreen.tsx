@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   Clock, 
-  CheckCircle2, 
   Bookmark, 
   ChevronLeft, 
   ChevronRight, 
@@ -16,7 +15,15 @@ import {
   RefreshCw,
   ShieldCheck,
   Sun,
-  Moon
+  Moon,
+  Maximize,
+  Minimize,
+  Type,
+  StickyNote,
+  EyeOff,
+  RotateCcw,
+  Check,
+  SlidersHorizontal
 } from 'lucide-react';
 import { Exam, SanitizedQuestion } from '../../types/exam';
 import { QuestionPalette } from './QuestionPalette';
@@ -30,6 +37,8 @@ interface ExamScreenProps {
   onFinishExam: (userAnswers: Record<string, number | null>, timeSpentSeconds: number, isEndedByTeacher?: boolean) => void;
   onCancel?: () => void;
 }
+
+type TextSize = 'normal' | 'large' | 'xlarge';
 
 export const ExamScreen: React.FC<ExamScreenProps> = ({
   exam,
@@ -85,8 +94,22 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
     return new Set(activeTestSession?.markedForReview || []);
   });
 
+  // Elimination / Strikethrough state: questionId -> array of option indices eliminated by student
+  const [eliminatedOptions, setEliminatedOptions] = useState<Record<string, number[]>>({});
+
+  // Mobile accessibility & tool states
+  const [textSize, setTextSize] = useState<TextSize>('normal');
+  const [isFullscreen, setIsFullscreen] = useState<boolean>(() => !!document.fullscreenElement);
+  const [showScratchpad, setShowScratchpad] = useState<boolean>(false);
+  const [scratchNotes, setScratchNotes] = useState<string>(() => {
+    return localStorage.getItem(`surya_scratch_${exam.id}`) || '';
+  });
+  const [savedPulse, setSavedPulse] = useState<boolean>(false);
+
+  // Modals & Notices
   const [showSubmitModal, setShowSubmitModal] = useState<boolean>(false);
   const [showMobilePalette, setShowMobilePalette] = useState<boolean>(false);
+  const [showMobileTools, setShowMobileTools] = useState<boolean>(false);
   const [tabSwitchCount, setTabSwitchCount] = useState<number>(0);
   const [showTabWarning, setShowTabWarning] = useState<boolean>(false);
   const [endedByTeacherNotice, setEndedByTeacherNotice] = useState<boolean>(false);
@@ -95,13 +118,42 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
   const [submitStage, setSubmitStage] = useState<number>(1);
   const [submitStatusText, setSubmitStatusText] = useState<string>('Syncing responses with Cloud Database...');
 
-  const startTimeRef = useRef<number>(activeTestSession?.examStartTime || Date.now());
+  const [sessionStartTime] = useState<number>(() => activeTestSession?.examStartTime || Date.now());
+  const startTimeRef = useRef<number>(sessionStartTime);
   const submittedRef = useRef<boolean>(false);
   const userAnswersRef = useRef(userAnswers);
+
+  // Touch swipe refs
+  const touchStartX = useRef<number | null>(null);
+  const touchStartY = useRef<number | null>(null);
+
+  // Horizontal strip refs for auto-centering active pill
+  const stripScrollRef = useRef<HTMLDivElement>(null);
+  const activePillRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     userAnswersRef.current = userAnswers;
   }, [userAnswers]);
+
+  // Auto-scroll horizontal pill bar to center active question
+  useEffect(() => {
+    if (activePillRef.current && stripScrollRef.current) {
+      activePillRef.current.scrollIntoView({
+        behavior: 'smooth',
+        inline: 'center',
+        block: 'nearest'
+      });
+    }
+  }, [currentIndex]);
+
+  // Fullscreen change listener
+  useEffect(() => {
+    const handleFsChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    document.addEventListener('fullscreenchange', handleFsChange);
+    return () => document.removeEventListener('fullscreenchange', handleFsChange);
+  }, []);
 
   // Final submission evaluation securely passed to handler with DB loading animation
   const handleFinalSubmit = useCallback(async (endedByTeacher: boolean = false) => {
@@ -154,7 +206,6 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
       if (matched && (!matched.isActive || matched.isEnded)) {
         if (!submittedRef.current && !endedByTeacherNotice) {
           setEndedByTeacherNotice(true);
-          // Auto submit student answers after 1.8 seconds so candidate sees why the exam ended
           setTimeout(() => {
             handleFinalSubmit(true);
           }, 1800);
@@ -163,11 +214,8 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
     };
 
     checkTeacherEnd();
-
-    // Check periodically in case of Firestore updates or background changes
     const checkInterval = setInterval(checkTeacherEnd, 1500);
 
-    // Cross-tab storage event (for same-origin tab testing)
     const handleStorage = (e: StorageEvent) => {
       if (e.key === 'surya_exams_data') {
         checkTeacherEnd();
@@ -204,7 +252,7 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
           clearInterval(timerInterval);
           setSecondsRemaining(0);
           if (!submittedRef.current) {
-            handleFinalSubmit(); // Auto-submit when countdown hits 0!
+            handleFinalSubmit();
           }
           return;
         }
@@ -244,7 +292,6 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
     const hrs = Math.floor(totalSecs / 3600);
     const mins = Math.floor((totalSecs % 3600) / 60);
     const secs = totalSecs % 60;
-
     const pad = (n: number) => (n < 10 ? `0${n}` : `${n}`);
 
     if (hrs > 0) {
@@ -253,14 +300,30 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
     return `${pad(mins)}:${pad(secs)}`;
   };
 
+  const triggerSavePulse = () => {
+    setSavedPulse(true);
+    setTimeout(() => setSavedPulse(false), 900);
+  };
+
   const handleSelectOption = (optionIndex: number) => {
     if (!currentQuestion) return;
+    
+    // If option was eliminated, un-eliminate it first
+    const qEliminated = eliminatedOptions[currentQuestion.id] || [];
+    if (qEliminated.includes(optionIndex)) {
+      setEliminatedOptions(prev => ({
+        ...prev,
+        [currentQuestion.id]: qEliminated.filter(i => i !== optionIndex)
+      }));
+    }
+
     const updated = {
       ...userAnswers,
       [currentQuestion.id]: optionIndex
     };
     setUserAnswers(updated);
     updateExamProgress({ userAnswers: updated });
+    triggerSavePulse();
   };
 
   const handleClearResponse = () => {
@@ -269,6 +332,7 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
     delete updated[currentQuestion.id];
     setUserAnswers(updated);
     updateExamProgress({ userAnswers: updated });
+    triggerSavePulse();
   };
 
   const handleToggleMarkForReview = () => {
@@ -281,6 +345,7 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
     }
     setMarkedForReview(copy);
     updateExamProgress({ markedForReview: Array.from(copy) });
+    triggerSavePulse();
   };
 
   const handleNavigateQuestion = (idx: number) => {
@@ -290,76 +355,166 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
     updateExamProgress({ currentIndex: validIdx });
   };
 
+  // Keyboard navigation & option selection
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (showSubmitModal || showInstructionsModal || showScratchpad || showMobilePalette) return;
+      const activeEl = document.activeElement;
+      if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA')) return;
+
+      if (e.key === 'ArrowRight') {
+        if (currentIndex < orderedQuestions.length - 1) {
+          handleNavigateQuestion(currentIndex + 1);
+        }
+      } else if (e.key === 'ArrowLeft') {
+        if (currentIndex > 0) {
+          handleNavigateQuestion(currentIndex - 1);
+        }
+      } else if (['1', '2', '3', '4'].includes(e.key)) {
+        const optIdx = parseInt(e.key, 10) - 1;
+        if (currentQuestion && currentQuestion.options[optIdx] !== undefined) {
+          handleSelectOption(optIdx);
+        }
+      } else if (e.key.toLowerCase() === 'm') {
+        handleToggleMarkForReview();
+      } else if (e.key.toLowerCase() === 'c') {
+        handleClearResponse();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [currentIndex, orderedQuestions.length, currentQuestion, showSubmitModal, showInstructionsModal, showScratchpad, showMobilePalette]);
+
+  // Toggle strikethrough / eliminate option
+  const handleToggleEliminate = (e: React.MouseEvent, optIdx: number) => {
+    e.stopPropagation();
+    if (!currentQuestion) return;
+    const qId = currentQuestion.id;
+    const currentList = eliminatedOptions[qId] || [];
+
+    if (currentList.includes(optIdx)) {
+      setEliminatedOptions(prev => ({
+        ...prev,
+        [qId]: currentList.filter(i => i !== optIdx)
+      }));
+    } else {
+      // If student was selecting this option and eliminated it, remove answer
+      if (userAnswers[qId] === optIdx) {
+        handleClearResponse();
+      }
+      setEliminatedOptions(prev => ({
+        ...prev,
+        [qId]: [...currentList, optIdx]
+      }));
+    }
+  };
+
+  // Cycle text size for readability
+  const handleCycleTextSize = () => {
+    setTextSize(prev => {
+      if (prev === 'normal') return 'large';
+      if (prev === 'large') return 'xlarge';
+      return 'normal';
+    });
+  };
+
+  // Fullscreen toggle
+  const handleToggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen?.().catch(() => {});
+      setIsFullscreen(true);
+    } else {
+      document.exitFullscreen?.().catch(() => {});
+      setIsFullscreen(false);
+    }
+  };
+
+  // Scratchpad storage
+  const handleScratchNotesChange = (text: string) => {
+    setScratchNotes(text);
+    localStorage.setItem(`surya_scratch_${exam.id}`, text);
+  };
+
+  // Touch swipe navigation for mobile
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX;
+    touchStartY.current = e.touches[0].clientY;
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (touchStartX.current === null || touchStartY.current === null) return;
+    const diffX = touchStartX.current - e.changedTouches[0].clientX;
+    const diffY = touchStartY.current - e.changedTouches[0].clientY;
+
+    // Minimum swipe threshold and horizontal dominance
+    if (Math.abs(diffX) > 60 && Math.abs(diffX) > Math.abs(diffY) * 1.4) {
+      if (diffX > 0) {
+        // Swiped left -> Next Question
+        if (currentIndex < orderedQuestions.length - 1) {
+          handleNavigateQuestion(currentIndex + 1);
+        }
+      } else {
+        // Swiped right -> Previous Question
+        if (currentIndex > 0) {
+          handleNavigateQuestion(currentIndex - 1);
+        }
+      }
+    }
+    touchStartX.current = null;
+    touchStartY.current = null;
+  };
+
+  // Dynamic typography classes
+  const getQuestionFontSizeClass = () => {
+    if (textSize === 'large') return 'text-base sm:text-xl';
+    if (textSize === 'xlarge') return 'text-lg sm:text-2xl';
+    return 'text-sm sm:text-lg';
+  };
+
+  const getOptionFontSizeClass = () => {
+    if (textSize === 'large') return 'text-sm sm:text-base';
+    if (textSize === 'xlarge') return 'text-base sm:text-lg';
+    return 'text-xs sm:text-sm';
+  };
+
   // Timer alert colors
   const isTimeUrgent = secondsRemaining < 120; // under 2 mins
   const isTimeWarning = secondsRemaining < 300 && !isTimeUrgent; // under 5 mins
   const answeredCount = Object.keys(userAnswers).length;
+  const completionPercent = orderedQuestions.length > 0 ? Math.round((answeredCount / orderedQuestions.length) * 100) : 0;
+  const currentEliminated = currentQuestion ? (eliminatedOptions[currentQuestion.id] || []) : [];
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col pb-8 transition-colors duration-200">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col transition-colors duration-200">
       
-      {/* Responsive Exam Header Bar */}
-      <header className="sticky top-0 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 shadow-xs transition-colors">
-        <div className="max-w-7xl mx-auto px-2.5 sm:px-6 lg:px-8 py-2 sm:py-3 flex items-center justify-between gap-2">
+      {/* Sticky Clean Exam Header Bar */}
+      <header className="sticky top-0 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800 shadow-xs transition-colors">
+        
+        {/* Main Navbar Row */}
+        <div className="max-w-7xl mx-auto px-2.5 sm:px-6 lg:px-8 py-2 sm:py-2.5 flex items-center justify-between gap-2.5">
           
-          {/* Exam info (Compact on mobile) */}
-          <div className="min-w-0 max-w-[48%] sm:max-w-none">
-            <div className="flex items-center gap-1.5 sm:gap-2">
-              <span className="text-[10px] sm:text-xs font-mono px-1.5 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/70 text-indigo-700 dark:text-indigo-300 font-bold border border-indigo-200 dark:border-indigo-800 shrink-0">
-                {exam.code}
-              </span>
-              <h2 className="font-bold text-slate-900 dark:text-white text-xs sm:text-base leading-tight truncate">
+          {/* Left: Exam Identity & Candidate */}
+          <div className="flex items-center gap-1.5 sm:gap-2.5 min-w-0 flex-1">
+            <span className="text-[10px] sm:text-xs font-mono font-black px-1.5 sm:px-2 py-0.5 rounded-md sm:rounded-lg bg-indigo-50 dark:bg-indigo-950/70 text-indigo-700 dark:text-indigo-300 border border-indigo-200/80 dark:border-indigo-800 shrink-0">
+              {exam.code}
+            </span>
+            <div className="min-w-0 flex-1">
+              <h2 className="font-bold text-slate-900 dark:text-white text-xs sm:text-sm md:text-base leading-tight truncate">
                 {exam.title}
               </h2>
+              <p className="text-[10px] text-slate-500 dark:text-slate-400 truncate hidden xs:block mt-0.5">
+                Candidate: <span className="font-semibold text-slate-700 dark:text-slate-300">{studentName}</span>
+              </p>
             </div>
-            <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate mt-0.5">
-              Candidate: <strong className="text-slate-800 dark:text-slate-200">{studentName}</strong>
-            </p>
           </div>
 
-          {/* Right Action Cluster: Mobile Palette Toggle + Theme + Timer + Submit */}
-          <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0 ml-auto">
+          {/* Right Action Cluster: Clean & Uncluttered */}
+          <div className="flex items-center gap-1 sm:gap-2 shrink-0 ml-auto">
             
-            {/* Mobile-only Palette Trigger Pill */}
-            <button
-              type="button"
-              onClick={() => setShowMobilePalette(!showMobilePalette)}
-              className="lg:hidden flex items-center gap-1 px-2 py-1.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/70 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 text-xs font-bold"
-              title="Toggle Question Palette"
-            >
-              <Layers className="w-3.5 h-3.5" />
-              <span>{currentIndex + 1}/{orderedQuestions.length}</span>
-            </button>
-
-            {/* Dark / Light Mode Quick Toggle */}
-            <button
-              type="button"
-              onClick={toggleTheme}
-              aria-label="Toggle Theme"
-              title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
-              className="p-1.5 sm:p-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-amber-400 transition-colors cursor-pointer"
-            >
-              {theme === 'dark' ? (
-                <Sun className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-400" />
-              ) : (
-                <Moon className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-600" />
-              )}
-            </button>
-
-            {/* In-Exam Instructions Button */}
-            <button
-              type="button"
-              onClick={() => setShowInstructionsModal(true)}
-              className="flex items-center gap-1 px-2 sm:px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-semibold transition-colors cursor-pointer"
-              title="Review Exam Rules & Instructions"
-            >
-              <HelpCircle className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
-              <span className="hidden sm:inline">Rules</span>
-            </button>
-
-            {/* Countdown Timer */}
+            {/* Prominent Countdown Timer */}
             <div
-              className={`flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl border font-mono font-black text-xs sm:text-sm transition-all shadow-xs ${
+              className={`flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-xl border font-mono font-black text-xs sm:text-sm transition-all shadow-xs ${
                 isTimeUrgent
                   ? 'bg-rose-50 dark:bg-rose-950/60 border-rose-300 dark:border-rose-800 text-rose-700 dark:text-rose-300 animate-pulse'
                   : isTimeWarning
@@ -371,18 +526,244 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
               <span>{formatTimer(secondsRemaining)}</span>
             </div>
 
-            {/* Submit Button */}
-            <button
-              type="button"
-              onClick={() => setShowSubmitModal(true)}
-              className="flex items-center gap-1 sm:gap-1.5 px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold text-xs sm:text-sm shadow-xs transition-all cursor-pointer"
-            >
-              <Send className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-              <span className="hidden xs:inline">Submit</span>
-            </button>
+            {/* Mobile Controls: Sleek Day/Night + Tools Menu Button */}
+            <div className="flex sm:hidden items-center gap-1">
+              {/* Quick Dark Mode Toggle */}
+              <button
+                type="button"
+                onClick={toggleTheme}
+                aria-label="Toggle Theme"
+                title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+                className="p-1.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-amber-400 transition-colors cursor-pointer"
+              >
+                {theme === 'dark' ? (
+                  <Sun className="w-3.5 h-3.5 text-amber-400" />
+                ) : (
+                  <Moon className="w-3.5 h-3.5 text-slate-600" />
+                )}
+              </button>
+
+              {/* Tools Tray Trigger (Replaces the 5 cluttered buttons with 1 elegant drawer) */}
+              <button
+                type="button"
+                onClick={() => setShowMobileTools(!showMobileTools)}
+                aria-label="Exam Tools"
+                title="Display tools & settings"
+                className={`p-1.5 rounded-xl border transition-all cursor-pointer ${
+                  showMobileTools
+                    ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
+                    : 'border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 hover:text-indigo-600'
+                }`}
+              >
+                <SlidersHorizontal className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            {/* Desktop-Only Tools Cluster */}
+            <div className="hidden sm:flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={handleCycleTextSize}
+                title={`Adjust text size (Current: ${textSize})`}
+                className="p-1.5 sm:p-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors cursor-pointer flex items-center gap-0.5 text-xs font-bold"
+              >
+                <Type className="w-3.5 h-3.5" />
+                <span className="text-[9px] uppercase font-black">{textSize === 'normal' ? '1x' : textSize === 'large' ? '1.2x' : '1.4x'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowScratchpad(true)}
+                title="Open Rough Calculation Notes / Scratchpad"
+                className="p-1.5 sm:p-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors cursor-pointer"
+              >
+                <StickyNote className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              </button>
+
+              <button
+                type="button"
+                onClick={handleToggleFullscreen}
+                title={isFullscreen ? "Exit Fullscreen" : "Enter Distraction-Free Fullscreen"}
+                className="p-1.5 sm:p-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors cursor-pointer"
+              >
+                {isFullscreen ? <Minimize className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> : <Maximize className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
+              </button>
+
+              <button
+                type="button"
+                onClick={toggleTheme}
+                aria-label="Toggle Theme"
+                title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+                className="p-1.5 sm:p-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-amber-400 transition-colors cursor-pointer"
+              >
+                {theme === 'dark' ? (
+                  <Sun className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-400" />
+                ) : (
+                  <Moon className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-600" />
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowInstructionsModal(true)}
+                className="flex items-center gap-1 px-2 sm:px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-semibold transition-colors cursor-pointer"
+                title="Review Exam Rules & Instructions"
+              >
+                <HelpCircle className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                <span>Rules</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowSubmitModal(true)}
+                className="flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold text-xs sm:text-sm shadow-xs transition-all cursor-pointer"
+              >
+                <Send className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                <span>Submit</span>
+              </button>
+            </div>
+
           </div>
 
         </div>
+
+        {/* Mobile Tools Dropdown Panel */}
+        {showMobileTools && (
+          <div className="sm:hidden border-t border-slate-200 dark:border-slate-800 bg-white/98 dark:bg-slate-900/98 backdrop-blur-md px-3 py-2.5 space-y-2.5 animate-fadeIn shadow-lg">
+            <div className="flex items-center justify-between text-xs font-semibold">
+              <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400 dark:text-slate-500">
+                Exam Preferences & Tools
+              </span>
+              <button
+                type="button"
+                onClick={() => setShowMobileTools(false)}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-0.5"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2">
+              <button
+                type="button"
+                onClick={handleCycleTextSize}
+                className="flex flex-col items-center justify-center p-2 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 active:scale-95 transition-all cursor-pointer"
+              >
+                <Type className="w-4 h-4 text-indigo-600 dark:text-indigo-400 mb-1" />
+                <span className="text-[10px] text-slate-400">Text Size</span>
+                <span className="font-bold text-xs">{textSize === 'normal' ? '1x Normal' : textSize === 'large' ? '1.2x Large' : '1.4x XL'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setShowMobileTools(false);
+                  setShowScratchpad(true);
+                }}
+                className="flex flex-col items-center justify-center p-2 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 active:scale-95 transition-all cursor-pointer"
+              >
+                <StickyNote className="w-4 h-4 text-amber-500 mb-1" />
+                <span className="text-[10px] text-slate-400">Rough Work</span>
+                <span className="font-bold text-xs">Scratchpad</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setShowMobileTools(false);
+                  setShowInstructionsModal(true);
+                }}
+                className="flex flex-col items-center justify-center p-2 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 active:scale-95 transition-all cursor-pointer"
+              >
+                <HelpCircle className="w-4 h-4 text-emerald-500 mb-1" />
+                <span className="text-[10px] text-slate-400">Guidelines</span>
+                <span className="font-bold text-xs">Rules</span>
+              </button>
+            </div>
+
+            <div className="flex items-center justify-between pt-1 border-t border-slate-100 dark:border-slate-800 text-xs">
+              <button
+                type="button"
+                onClick={handleToggleFullscreen}
+                className="flex items-center gap-1.5 py-1 px-2 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 font-semibold cursor-pointer"
+              >
+                {isFullscreen ? <Minimize className="w-3.5 h-3.5" /> : <Maximize className="w-3.5 h-3.5" />}
+                <span className="text-[11px]">{isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}</span>
+              </button>
+
+              <span className="text-[10px] text-slate-400">
+                Responses auto-save in real-time
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* Global Test Progress Line */}
+        <div className="w-full bg-slate-100 dark:bg-slate-800/80 h-1">
+          <div 
+            className="bg-gradient-to-r from-indigo-500 via-purple-500 to-emerald-500 h-full transition-all duration-300 ease-out"
+            style={{ width: `${completionPercent}%` }}
+          />
+        </div>
+
+        {/* Integrated Question Carousel Strip */}
+        <div className="bg-slate-50/70 dark:bg-slate-900/60 border-t border-slate-200/60 dark:border-slate-800/60 py-1.5 px-2.5 sm:px-6">
+          <div className="max-w-7xl mx-auto flex items-center gap-2">
+            
+            <div 
+              ref={stripScrollRef}
+              className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 px-0.5 flex-1 scroll-smooth"
+            >
+              {orderedQuestions.map((q, idx) => {
+                const isCurrent = currentIndex === idx;
+                const isAnswered = userAnswers[q.id] !== undefined && userAnswers[q.id] !== null;
+                const isMarked = markedForReview.has(q.id);
+
+                let pillStyles = 'bg-white dark:bg-slate-800/90 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 border-slate-200 dark:border-slate-700';
+
+                if (isCurrent) {
+                  pillStyles = 'bg-indigo-600 text-white font-extrabold ring-2 ring-indigo-400 dark:ring-indigo-500 shadow-xs scale-105';
+                } else if (isMarked) {
+                  pillStyles = 'bg-amber-500 text-white font-bold border-amber-600';
+                } else if (isAnswered) {
+                  pillStyles = 'bg-emerald-600 text-white font-bold border-emerald-700';
+                }
+
+                return (
+                  <button
+                    key={q.id}
+                    ref={isCurrent ? activePillRef : null}
+                    type="button"
+                    onClick={() => handleNavigateQuestion(idx)}
+                    className={`min-w-[32px] sm:min-w-[38px] h-7 sm:h-8 px-1.5 sm:px-2 rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-semibold flex items-center justify-center gap-1 cursor-pointer transition-all shrink-0 select-none border active:scale-95 ${pillStyles}`}
+                    title={`Question ${idx + 1}${isAnswered ? ' (Answered)' : ''}${isMarked ? ' (Marked for review)' : ''}`}
+                  >
+                    <span>{idx + 1}</span>
+                    {isMarked && !isCurrent && (
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-300 shrink-0" />
+                    )}
+                    {isAnswered && !isCurrent && (
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-300 shrink-0" />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Quick Palette Drawer Pill Trigger */}
+            <button
+              type="button"
+              onClick={() => setShowMobilePalette(true)}
+              className="flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-lg sm:rounded-xl bg-white dark:bg-slate-800 text-indigo-700 dark:text-indigo-300 border border-slate-200 dark:border-slate-700 text-xs font-bold shrink-0 hover:border-indigo-300 shadow-2xs cursor-pointer"
+              title="Open Full Question Palette"
+            >
+              <Layers className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+              <span className="text-[11px] font-mono font-bold">{currentIndex + 1}/{orderedQuestions.length}</span>
+            </button>
+
+          </div>
+        </div>
+
       </header>
 
       {/* Tab Switch Warning Banner */}
@@ -397,7 +778,7 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
           <button
             type="button"
             onClick={() => setShowTabWarning(false)}
-            className="text-amber-600 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-200 p-1"
+            className="text-amber-600 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-200 p-1 cursor-pointer"
           >
             <X className="w-3.5 h-3.5" />
           </button>
@@ -405,39 +786,60 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
       )}
 
       {/* Main Exam Workspace */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-3 sm:p-6 lg:p-8 grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
+      <main 
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+        className="flex-1 max-w-7xl w-full mx-auto p-2.5 sm:p-6 lg:p-8 grid grid-cols-1 lg:grid-cols-3 gap-3.5 sm:gap-6 pb-28 lg:pb-8"
+      >
         
         {/* Left 2 Cols: Question Card */}
-        <div className="lg:col-span-2 space-y-4 sm:space-y-5">
+        <div className="lg:col-span-2 space-y-3 sm:space-y-4">
           {currentQuestion && (
-            <div className="bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl border border-slate-200 dark:border-slate-800 p-4 sm:p-7 shadow-xs flex flex-col justify-between min-h-[400px] sm:min-h-[460px] transition-colors">
+            <div className="bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl border border-slate-200 dark:border-slate-800 p-3.5 sm:p-7 shadow-xs flex flex-col justify-between min-h-[440px] sm:min-h-[500px] transition-colors relative">
               
-              {/* Question Meta & Actions */}
+              {/* Question Meta, Tags & Actions */}
               <div>
-                <div className="flex flex-wrap items-center justify-between gap-2 pb-3.5 border-b border-slate-100 dark:border-slate-800 mb-4 sm:mb-6">
-                  <div className="flex items-center gap-2">
-                    <span className="px-2.5 py-1 rounded-lg bg-indigo-50 dark:bg-indigo-950/70 text-indigo-700 dark:text-indigo-300 font-extrabold text-xs">
-                      Q {currentIndex + 1} of {orderedQuestions.length}
+                <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-slate-100 dark:border-slate-800 mb-3 sm:mb-5">
+                  
+                  {/* Question & Mark Details */}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="px-2.5 py-1 rounded-xl bg-indigo-50 dark:bg-indigo-950/70 text-indigo-700 dark:text-indigo-300 font-extrabold text-xs border border-indigo-100 dark:border-indigo-800">
+                      Question {currentIndex + 1} of {orderedQuestions.length}
                     </span>
-                    <span className="text-[11px] sm:text-xs font-semibold text-slate-500 dark:text-slate-400">
-                      ({currentQuestion.marks || 1} Pt{currentQuestion.marks > 1 ? 's' : ''})
+
+                    <span className="px-2 py-0.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 font-bold text-[10px] sm:text-[11px] border border-emerald-200 dark:border-emerald-800/80">
+                      +{currentQuestion.marks || 1} mark{currentQuestion.marks > 1 ? 's' : ''}
                     </span>
+
+                    {exam.negativeMarking > 0 && (
+                      <span className="px-2 py-0.5 rounded-lg bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 font-bold text-[10px] sm:text-[11px] border border-rose-200 dark:border-rose-800/80">
+                        -{exam.negativeMarking} neg
+                      </span>
+                    )}
+
+                    {/* Auto-Saved Pulse Notification */}
+                    <div className="flex items-center gap-1 text-[10px] text-slate-400 dark:text-slate-500 font-medium">
+                      <span className={`w-1.5 h-1.5 rounded-full ${savedPulse ? 'bg-emerald-500 scale-125' : 'bg-slate-300 dark:bg-slate-600'} transition-all`} />
+                      <span className="hidden sm:inline">Auto-saved</span>
+                    </div>
                   </div>
 
+                  {/* Actions: Review & Clear Response */}
                   <div className="flex items-center gap-1.5 sm:gap-2">
+                    
                     {/* Mark for Review */}
                     <button
                       type="button"
                       onClick={handleToggleMarkForReview}
-                      className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
+                      className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer select-none active:scale-95 ${
                         markedForReview.has(currentQuestion.id)
                           ? 'bg-amber-50 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-800 ring-1 ring-amber-300 dark:ring-amber-700'
                           : 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700'
                       }`}
                     >
-                      <Bookmark className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                      <Bookmark className={`w-3.5 h-3.5 ${markedForReview.has(currentQuestion.id) ? 'fill-amber-500 text-amber-500' : 'text-slate-400 dark:text-slate-500'}`} />
                       <span className="text-[11px] sm:text-xs">
-                        {markedForReview.has(currentQuestion.id) ? 'Review' : 'Mark Review'}
+                        {markedForReview.has(currentQuestion.id) ? 'Flagged' : 'Flag'}
                       </span>
                     </button>
 
@@ -446,63 +848,99 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
                       <button
                         type="button"
                         onClick={handleClearResponse}
-                        className="text-[11px] sm:text-xs text-rose-600 dark:text-rose-400 hover:underline px-1.5 py-1 cursor-pointer"
+                        className="flex items-center gap-1 text-[11px] sm:text-xs text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 px-2 py-1.5 rounded-xl border border-rose-200 dark:border-rose-900/60 transition-colors cursor-pointer"
+                        title="Clear chosen answer"
                       >
-                        Clear
+                        <RotateCcw className="w-3 h-3" />
+                        <span>Clear</span>
                       </button>
                     )}
                   </div>
                 </div>
 
                 {/* Question Statement */}
-                <h3 className="text-sm sm:text-lg font-bold text-slate-900 dark:text-white leading-snug sm:leading-relaxed mb-4 sm:mb-6">
+                <h3 className={`font-bold text-slate-900 dark:text-white leading-relaxed mb-4 sm:mb-6 select-text ${getQuestionFontSizeClass()}`}>
                   {currentQuestion.questionText}
                 </h3>
 
-                {/* 4 Interactive Option Cards */}
+                {/* Micro-hint for Mobile Swipe */}
+                <div className="lg:hidden flex items-center justify-between text-[10px] text-slate-400 dark:text-slate-500 mb-2 px-0.5">
+                  <span>Tap option to select • Tap <s>slash</s> to eliminate</span>
+                  <span>Swipe ↔ to change question</span>
+                </div>
+
+                {/* Interactive Options Cards */}
                 <div className="space-y-2.5 sm:space-y-3">
                   {currentQuestion.options.map((opt, optIdx) => {
                     const isSelected = userAnswers[currentQuestion.id] === optIdx;
+                    const isEliminated = currentEliminated.includes(optIdx);
                     const letter = String.fromCharCode(65 + optIdx);
 
                     return (
                       <div
                         key={optIdx}
                         onClick={() => handleSelectOption(optIdx)}
-                        className={`p-3 sm:p-4 rounded-xl sm:rounded-2xl border transition-all cursor-pointer flex items-center gap-3 select-none active:scale-[0.99] ${
-                          isSelected
+                        className={`group p-3 sm:p-4 rounded-xl sm:rounded-2xl border transition-all cursor-pointer flex items-center gap-3 select-none active:scale-[0.99] relative ${
+                          isEliminated
+                            ? 'opacity-40 border-dashed border-slate-300 dark:border-slate-700 bg-slate-100/50 dark:bg-slate-900/40 line-through'
+                            : isSelected
                             ? 'border-indigo-600 dark:border-indigo-500 bg-indigo-50/70 dark:bg-indigo-950/50 shadow-xs ring-2 ring-indigo-600/20 dark:ring-indigo-500/30'
-                            : 'border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/40 hover:bg-white dark:hover:bg-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
+                            : 'border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 hover:bg-white dark:hover:bg-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
                         }`}
                       >
+                        {/* Letter indicator / Radio */}
                         <div
-                          className={`w-7 h-7 sm:w-8 sm:h-8 rounded-lg sm:rounded-xl flex items-center justify-center font-bold text-xs shrink-0 transition-colors ${
+                          className={`w-7 h-7 sm:w-8 sm:h-8 rounded-xl flex items-center justify-center font-bold text-xs shrink-0 transition-colors ${
                             isSelected
                               ? 'bg-indigo-600 text-white shadow-xs'
-                              : 'bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300'
+                              : isEliminated
+                              ? 'bg-slate-200 dark:bg-slate-800 text-slate-400'
+                              : 'bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 group-hover:border-indigo-400'
                           }`}
                         >
-                          {isSelected ? <CheckCircle2 className="w-4 h-4 text-white" /> : letter}
+                          {isSelected ? <Check className="w-4 h-4 text-white stroke-[3]" /> : letter}
                         </div>
-                        <span className={`text-xs sm:text-sm leading-snug flex-1 ${isSelected ? 'font-bold text-indigo-950 dark:text-indigo-200' : 'text-slate-700 dark:text-slate-300'}`}>
+
+                        {/* Option Text */}
+                        <span className={`leading-snug flex-1 ${getOptionFontSizeClass()} ${
+                          isSelected 
+                            ? 'font-bold text-indigo-950 dark:text-indigo-200' 
+                            : isEliminated 
+                            ? 'text-slate-400 dark:text-slate-500 line-through' 
+                            : 'text-slate-700 dark:text-slate-300'
+                        }`}>
                           {opt}
                         </span>
+
+                        {/* Strikethrough / Elimination Action Icon */}
+                        <button
+                          type="button"
+                          onClick={(e) => handleToggleEliminate(e, optIdx)}
+                          title={isEliminated ? "Restore this option" : "Eliminate this option (Cross out)"}
+                          className={`p-1.5 rounded-lg transition-colors cursor-pointer shrink-0 ${
+                            isEliminated
+                              ? 'text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/50 hover:bg-indigo-100'
+                              : 'text-slate-300 dark:text-slate-600 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-200/60 dark:hover:bg-slate-700'
+                          }`}
+                        >
+                          <EyeOff className="w-3.5 h-3.5" />
+                        </button>
                       </div>
                     );
                   })}
                 </div>
               </div>
 
-              {/* Bottom Nav Controls */}
-              <div className="pt-5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2 mt-5">
+              {/* Desktop-Only In-Card Navigation Controls */}
+              <div className="hidden lg:flex pt-5 border-t border-slate-100 dark:border-slate-800 items-center justify-between gap-2 mt-5">
                 <button
                   type="button"
                   disabled={currentIndex === 0}
                   onClick={() => handleNavigateQuestion(currentIndex - 1)}
-                  className="flex items-center gap-1 sm:gap-1.5 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-semibold text-xs hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-40 disabled:pointer-events-none transition-colors cursor-pointer"
+                  className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-semibold text-xs hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-40 disabled:pointer-events-none transition-colors cursor-pointer"
                 >
                   <ChevronLeft className="w-4 h-4" />
-                  <span>Prev</span>
+                  <span>Previous Question</span>
                 </button>
 
                 <div className="flex items-center gap-2">
@@ -510,19 +948,19 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
                     <button
                       type="button"
                       onClick={() => handleNavigateQuestion(currentIndex + 1)}
-                      className="flex items-center gap-1 sm:gap-1.5 px-4 sm:px-6 py-2 sm:py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-bold text-xs shadow-xs transition-all cursor-pointer"
+                      className="flex items-center gap-1.5 px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-bold text-xs shadow-xs transition-all cursor-pointer"
                     >
-                      <span>Next</span>
+                      <span>Next Question</span>
                       <ChevronRight className="w-4 h-4" />
                     </button>
                   ) : (
                     <button
                       type="button"
                       onClick={() => setShowSubmitModal(true)}
-                      className="flex items-center gap-1 sm:gap-1.5 px-4 sm:px-6 py-2 sm:py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold text-xs shadow-xs transition-all cursor-pointer"
+                      className="flex items-center gap-1.5 px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold text-xs shadow-xs transition-all cursor-pointer"
                     >
                       <Send className="w-4 h-4" />
-                      <span>Review & Submit</span>
+                      <span>Review & Submit Exam</span>
                     </button>
                   )}
                 </div>
@@ -532,7 +970,7 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
           )}
         </div>
 
-        {/* Desktop Sidebar: Question Navigation Palette */}
+        {/* Desktop Sidebar: Enhanced Question Navigation Palette & Help */}
         <div className="hidden lg:block space-y-4">
           <QuestionPalette
             totalQuestions={orderedQuestions.length}
@@ -543,30 +981,109 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
             onSelectQuestion={handleNavigateQuestion}
           />
 
-          {/* Guidelines Box */}
+          {/* Quick Keyboard Shortcuts Helper for Desktops */}
           <div className="bg-slate-100/80 dark:bg-slate-900/80 rounded-2xl p-4 text-xs text-slate-600 dark:text-slate-400 space-y-2 border border-slate-200 dark:border-slate-800 transition-colors">
             <h5 className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
               <HelpCircle className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-              <span>Exam Rules & Tips</span>
+              <span>Keyboard Shortcuts</span>
             </h5>
-            <ul className="list-disc pl-4 space-y-1 text-slate-500 dark:text-slate-400 text-[11px]">
-              <li>Exam automatically submits when timer expires.</li>
-              <li>You can modify your responses at any time.</li>
-              <li>Palette numbers let you jump directly to any question.</li>
-            </ul>
+            <div className="grid grid-cols-2 gap-1.5 text-[11px] text-slate-500 dark:text-slate-400">
+              <div><kbd className="px-1.5 py-0.5 rounded bg-white dark:bg-slate-800 border text-[10px]">←</kbd> / <kbd className="px-1.5 py-0.5 rounded bg-white dark:bg-slate-800 border text-[10px]">→</kbd> Prev/Next</div>
+              <div><kbd className="px-1.5 py-0.5 rounded bg-white dark:bg-slate-800 border text-[10px]">1-4</kbd> Choose A-D</div>
+              <div><kbd className="px-1.5 py-0.5 rounded bg-white dark:bg-slate-800 border text-[10px]">M</kbd> Flag for review</div>
+              <div><kbd className="px-1.5 py-0.5 rounded bg-white dark:bg-slate-800 border text-[10px]">C</kbd> Clear response</div>
+            </div>
           </div>
         </div>
 
       </main>
 
+      {/* Sticky Bottom Action Bar for Mobile Devices */}
+      <footer className="lg:hidden fixed bottom-0 inset-x-0 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200 dark:border-slate-800 p-2 sm:p-2.5 pb-[max(0.625rem,env(safe-area-inset-bottom))] shadow-lg transition-colors">
+        <div className="max-w-md mx-auto flex items-center justify-between gap-1.5">
+          
+          {/* Previous Button */}
+          <button
+            type="button"
+            disabled={currentIndex === 0}
+            onClick={() => handleNavigateQuestion(currentIndex - 1)}
+            className="flex-1 py-2 px-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-xs flex items-center justify-center gap-1 disabled:opacity-30 disabled:pointer-events-none active:scale-95 transition-all"
+          >
+            <ChevronLeft className="w-4 h-4" />
+            <span>Prev</span>
+          </button>
+
+          {/* Mark for Review Toggle */}
+          <button
+            type="button"
+            onClick={handleToggleMarkForReview}
+            className={`py-2 px-3 rounded-xl border font-bold text-xs flex items-center justify-center gap-1 transition-all active:scale-95 ${
+              currentQuestion && markedForReview.has(currentQuestion.id)
+                ? 'bg-amber-500 text-white border-amber-600 shadow-xs'
+                : 'bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700'
+            }`}
+            title="Flag question for review"
+          >
+            <Bookmark className={`w-3.5 h-3.5 ${currentQuestion && markedForReview.has(currentQuestion.id) ? 'fill-white' : ''}`} />
+            <span className="hidden xs:inline">Flag</span>
+          </button>
+
+          {/* Clear Response */}
+          {currentQuestion && userAnswers[currentQuestion.id] !== undefined && userAnswers[currentQuestion.id] !== null && (
+            <button
+              type="button"
+              onClick={handleClearResponse}
+              className="py-2 px-2.5 rounded-xl border border-rose-200 dark:border-rose-900/60 bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 font-bold text-xs flex items-center justify-center gap-1 active:scale-95 transition-all"
+              title="Clear choice"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+            </button>
+          )}
+
+          {/* Palette Modal Trigger */}
+          <button
+            type="button"
+            onClick={() => setShowMobilePalette(true)}
+            className="py-2 px-2.5 rounded-xl border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-950/70 text-indigo-700 dark:text-indigo-300 font-bold text-xs flex items-center justify-center gap-1 active:scale-95 transition-all"
+            title="Open question navigator sheet"
+          >
+            <Layers className="w-3.5 h-3.5" />
+            <span>{currentIndex + 1}/{orderedQuestions.length}</span>
+          </button>
+
+          {/* Next / Submit Button */}
+          {currentIndex < orderedQuestions.length - 1 ? (
+            <button
+              type="button"
+              onClick={() => handleNavigateQuestion(currentIndex + 1)}
+              className="flex-1 py-2 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs flex items-center justify-center gap-1 active:scale-95 shadow-xs transition-all"
+            >
+              <span>Next</span>
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setShowSubmitModal(true)}
+              className="flex-1 py-2 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center justify-center gap-1 active:scale-95 shadow-xs transition-all"
+            >
+              <Send className="w-3.5 h-3.5" />
+              <span>Submit</span>
+            </button>
+          )}
+
+        </div>
+      </footer>
+
       {/* Mobile Slide-Up / Bottom-Sheet Palette Drawer */}
       {showMobilePalette && (
         <div className="lg:hidden fixed inset-0 z-50 flex flex-col justify-end bg-slate-900/60 dark:bg-slate-950/80 backdrop-blur-xs animate-fadeIn">
-          <div className="bg-white dark:bg-slate-900 rounded-t-3xl max-h-[80vh] overflow-y-auto p-4 sm:p-6 shadow-2xl border-t border-slate-200 dark:border-slate-800 space-y-4">
+          <div className="bg-white dark:bg-slate-900 rounded-t-3xl max-h-[85vh] overflow-y-auto p-4 sm:p-6 shadow-2xl border-t border-slate-200 dark:border-slate-800 space-y-4">
+            
             <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
               <h4 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
                 <Layers className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-                <span>Question Navigator ({answeredCount}/{orderedQuestions.length} Answered)</span>
+                <span>Question Navigator ({answeredCount}/{orderedQuestions.length})</span>
               </h4>
               <button
                 type="button"
@@ -593,6 +1110,59 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
             >
               Close Navigator
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Rough Work / Scratchpad Drawer Modal */}
+      {showScratchpad && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 dark:bg-slate-950/80 backdrop-blur-xs animate-fadeIn">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-lg w-full p-4 sm:p-6 shadow-2xl border border-slate-200 dark:border-slate-800 space-y-3.5 my-auto max-h-[90vh] overflow-y-auto transition-colors">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-indigo-50 dark:bg-indigo-950/70 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
+                  <StickyNote className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white">
+                    Scratchpad / Rough Work
+                  </h3>
+                  <p className="text-[10px] text-slate-400">Notes are saved automatically for this exam</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowScratchpad(false)}
+                className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <textarea
+              rows={8}
+              value={scratchNotes}
+              onChange={(e) => handleScratchNotesChange(e.target.value)}
+              placeholder="Use this area for quick formulas, rough calculation steps, or mental notes..."
+              className="w-full p-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/80 text-slate-900 dark:text-white text-xs sm:text-sm font-mono focus:outline-hidden focus:ring-2 focus:ring-indigo-500 resize-none"
+            />
+
+            <div className="flex items-center justify-between gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => handleScratchNotesChange('')}
+                className="text-xs text-rose-600 dark:text-rose-400 hover:underline px-2 py-1 cursor-pointer"
+              >
+                Clear Notes
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowScratchpad(false)}
+                className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs cursor-pointer shadow-xs"
+              >
+                Done
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -635,12 +1205,13 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
             </div>
 
             <div className="space-y-2 text-xs text-slate-600 dark:text-slate-300">
-              <h4 className="font-bold text-slate-900 dark:text-white">Key Guidelines:</h4>
+              <h4 className="font-bold text-slate-900 dark:text-white">Mobile Test Features:</h4>
               <ul className="list-disc pl-4 space-y-1 text-[11px] text-slate-600 dark:text-slate-300">
-                <li>Selected answers save automatically. You may modify choices anytime before final submit.</li>
-                <li>When the timer hits 0:00, or if concluded by the teacher, the exam auto-submits.</li>
-                <li>Palette numbers allow jumping directly to any question.</li>
-                <li>Anti-cheat tab switch monitoring is active for this session.</li>
+                <li><strong>Swipe Gestures:</strong> Swipe left or right on the question card to switch questions smoothly.</li>
+                <li><strong>Eliminate Options:</strong> Tap the cross icon on any option to visually strike it out while thinking.</li>
+                <li><strong>Horizontal Strip:</strong> Tap any number pill above the question for instant jumping.</li>
+                <li><strong>Font Zoom:</strong> Tap the "1x" icon in the header to enlarge question text for comfortable reading.</li>
+                <li><strong>Rough Notes:</strong> Tap the sticky note icon to open the scratchpad.</li>
               </ul>
             </div>
 
@@ -684,7 +1255,7 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
                 </span>
               </div>
               <div>
-                <span className="text-[10px] text-slate-400 dark:text-slate-500 font-semibold block uppercase">Review</span>
+                <span className="text-[10px] text-slate-400 dark:text-slate-500 font-semibold block uppercase">Flagged</span>
                 <span className="text-base font-black text-amber-600 dark:text-amber-400">
                   {markedForReview.size}
                 </span>
@@ -697,7 +1268,7 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
                 onClick={() => setShowSubmitModal(false)}
                 className="flex-1 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 font-semibold text-xs transition-colors cursor-pointer"
               >
-                Continue
+                Continue Test
               </button>
               <button
                 type="button"
@@ -746,11 +1317,8 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
 
             {/* Central Animated Orb with DB & Cloud Icons */}
             <div className="relative w-24 h-24 mx-auto flex items-center justify-center">
-              {/* Outer pulsing ring */}
               <div className="absolute inset-0 rounded-full bg-indigo-500/10 animate-ping opacity-75" />
-              {/* Spinning gradient ring */}
               <div className="absolute inset-1 rounded-full border-2 border-indigo-500/20 border-t-indigo-600 border-r-purple-600 animate-spin" />
-              {/* Inner glowing container */}
               <div className="relative w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-600 via-indigo-700 to-purple-800 text-white flex items-center justify-center shadow-lg shadow-indigo-600/30">
                 {submitStage === 1 ? (
                   <Database className="w-8 h-8 animate-pulse text-indigo-100" />

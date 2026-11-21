@@ -102,31 +102,31 @@ export const McqBuilderText: React.FC<McqBuilderTextProps> = ({ onAddQuestions }
   };
 
   return (
-    <div className="bg-white rounded-xl sm:rounded-2xl border border-slate-200 p-4 sm:p-5 shadow-xs space-y-3.5 sm:space-y-4">
+    <div className="bg-white dark:bg-slate-900 rounded-xl sm:rounded-2xl border border-slate-200 dark:border-slate-800 p-4 sm:p-5 shadow-xs space-y-3.5 sm:space-y-4 transition-colors">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-slate-100">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-slate-100 dark:border-slate-800">
         <div>
-          <h4 className="text-xs sm:text-sm font-bold text-slate-800 flex items-center gap-1.5">
-            <FileText className="w-4 h-4 text-indigo-600" />
+          <h4 className="text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+            <FileText className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
             <span>Create MCQs from Text</span>
           </h4>
-          <p className="text-[11px] sm:text-xs text-slate-500">
+          <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400">
             Paste formatted questions or raw lecture notes to extract MCQs automatically.
           </p>
         </div>
         <button
           type="button"
           onClick={handleLoadSample}
-          className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-lg transition-colors cursor-pointer self-start sm:self-auto"
+          className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs font-semibold text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/70 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 border border-indigo-200 dark:border-indigo-800 rounded-lg transition-colors cursor-pointer self-start sm:self-auto"
         >
-          <Lightbulb className="w-3.5 h-3.5 text-indigo-600" />
+          <Lightbulb className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
           <span>Sample Format</span>
         </button>
       </div>
 
       {/* Textarea */}
       <div>
-        <label className="block text-[11px] sm:text-xs font-semibold uppercase tracking-wider text-slate-600 mb-1">
+        <label className="block text-[11px] sm:text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 mb-1">
           Paste Text / Question Bank
         </label>
         <textarea
@@ -134,7 +134,7 @@ export const McqBuilderText: React.FC<McqBuilderTextProps> = ({ onAddQuestions }
           value={inputText}
           onChange={(e) => setInputText(e.target.value)}
           placeholder={`Q1. What is React?\nA) A UI library\nB) A database\nC) An OS\nD) A protocol\nAnswer: A\nExplanation: React is a UI library.`}
-          className="w-full p-2.5 sm:p-3 text-xs sm:text-sm font-mono bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 placeholder:font-sans placeholder:text-slate-400"
+          className="w-full p-2.5 sm:p-3 text-xs sm:text-sm font-mono bg-slate-50 dark:bg-slate-800/80 text-slate-900 dark:text-white border border-slate-300 dark:border-slate-700 rounded-xl focus:bg-white dark:focus:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 placeholder:font-sans placeholder:text-slate-400 dark:placeholder:text-slate-500 transition-colors"
         />
       </div>
 
@@ -164,10 +164,10 @@ export const McqBuilderText: React.FC<McqBuilderTextProps> = ({ onAddQuestions }
         <div
           className={`p-2.5 sm:p-3 rounded-xl text-xs font-medium border flex items-center gap-2 ${
             statusMessage.type === 'success'
-              ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+              ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300'
               : statusMessage.type === 'error'
-              ? 'bg-rose-50 border-rose-200 text-rose-800'
-              : 'bg-indigo-50 border-indigo-200 text-indigo-800'
+              ? 'bg-rose-50 dark:bg-rose-950/40 border-rose-200 dark:border-rose-900/50 text-rose-800 dark:text-rose-300'
+              : 'bg-indigo-50 dark:bg-indigo-950/40 border-indigo-200 dark:border-indigo-800 text-indigo-800 dark:text-indigo-300'
           }`}
         >
           <Info className="w-4 h-4 shrink-0" />
@@ -177,17 +177,17 @@ export const McqBuilderText: React.FC<McqBuilderTextProps> = ({ onAddQuestions }
 
       {/* Parsed Preview Section */}
       {parsedQuestions.length > 0 && (
-        <div className="pt-3 border-t border-slate-200 space-y-3">
+        <div className="pt-3 border-t border-slate-200 dark:border-slate-800 space-y-3">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
             <button
               type="button"
               onClick={toggleSelectAll}
-              className="text-xs font-semibold text-slate-700 flex items-center gap-1.5 hover:text-indigo-600 self-start"
+              className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5 hover:text-indigo-600 dark:hover:text-indigo-400 self-start cursor-pointer"
             >
               {selectedIds.size === parsedQuestions.length ? (
-                <CheckSquare className="w-4 h-4 text-indigo-600" />
+                <CheckSquare className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
               ) : (
-                <Square className="w-4 h-4 text-slate-400" />
+                <Square className="w-4 h-4 text-slate-400 dark:text-slate-500" />
               )}
               <span>Select All ({selectedIds.size}/{parsedQuestions.length})</span>
             </button>
@@ -212,20 +212,20 @@ export const McqBuilderText: React.FC<McqBuilderTextProps> = ({ onAddQuestions }
                   onClick={() => toggleSelect(q.id)}
                   className={`p-3 rounded-xl border text-xs cursor-pointer transition-all ${
                     isSelected
-                      ? 'border-indigo-500 bg-indigo-50/40 ring-1 ring-indigo-500/30'
-                      : 'border-slate-200 bg-slate-50/50 hover:bg-slate-50'
+                      ? 'border-indigo-500 dark:border-indigo-500 bg-indigo-50/40 dark:bg-indigo-950/40 ring-1 ring-indigo-500/30'
+                      : 'border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 hover:bg-slate-50 dark:hover:bg-slate-800'
                   }`}
                 >
                   <div className="flex items-start gap-2">
                     <div className="mt-0.5 shrink-0">
                       {isSelected ? (
-                        <CheckSquare className="w-4 h-4 text-indigo-600" />
+                        <CheckSquare className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
                       ) : (
-                        <Square className="w-4 h-4 text-slate-400" />
+                        <Square className="w-4 h-4 text-slate-400 dark:text-slate-500" />
                       )}
                     </div>
                     <div className="flex-1 space-y-1.5 min-w-0">
-                      <p className="font-semibold text-slate-900 leading-snug">
+                      <p className="font-semibold text-slate-900 dark:text-white leading-snug">
                         {qIdx + 1}. {q.questionText}
                       </p>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 pl-0 sm:pl-2">
@@ -236,18 +236,18 @@ export const McqBuilderText: React.FC<McqBuilderTextProps> = ({ onAddQuestions }
                               key={optIdx}
                               className={`px-2 py-1 rounded-md text-[11px] truncate ${
                                 isCorrect
-                                  ? 'bg-emerald-100 text-emerald-900 font-semibold border border-emerald-300'
-                                  : 'text-slate-600 bg-white border border-slate-200'
+                                  ? 'bg-emerald-100 dark:bg-emerald-950/70 text-emerald-900 dark:text-emerald-200 font-semibold border border-emerald-300 dark:border-emerald-800'
+                                  : 'text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700'
                               }`}
                             >
-                              <span className="font-mono mr-1">{String.fromCharCode(65 + optIdx)})</span>
+                              <span className="font-mono mr-1 text-slate-400">{String.fromCharCode(65 + optIdx)})</span>
                               {opt}
                             </div>
                           );
                         })}
                       </div>
                       {q.explanation && (
-                        <p className="text-[10px] sm:text-[11px] text-slate-500 italic pl-0 sm:pl-2 pt-0.5">
+                        <p className="text-[10px] sm:text-[11px] text-slate-500 dark:text-slate-400 italic pl-0 sm:pl-2 pt-0.5">
                           Note: {q.explanation}
                         </p>
                       )}

@@ -214,14 +214,14 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
 
       {/* Primary Tab Bar */}
       {activeTab !== 'editor' && (
-        <div className="flex items-center gap-1.5 sm:gap-2 border-b border-slate-200 pb-2 overflow-x-auto">
+        <div className="flex items-center gap-1.5 sm:gap-2 border-b border-slate-200 dark:border-slate-800 pb-2 overflow-x-auto">
           <button
             type="button"
             onClick={() => setActiveTab('exams')}
             className={`flex items-center gap-1.5 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl font-bold text-xs sm:text-sm whitespace-nowrap transition-all cursor-pointer ${
               activeTab === 'exams'
                 ? 'bg-indigo-600 text-white shadow-xs'
-                : 'text-slate-600 hover:bg-slate-100'
+                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
             }`}
           >
             <BookOpen className="w-4 h-4" />
@@ -234,7 +234,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
             className={`flex items-center gap-1.5 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl font-bold text-xs sm:text-sm whitespace-nowrap transition-all cursor-pointer ${
               activeTab === 'submissions'
                 ? 'bg-indigo-600 text-white shadow-xs'
-                : 'text-slate-600 hover:bg-slate-100'
+                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
             }`}
           >
             <Users className="w-4 h-4" />
@@ -265,10 +265,10 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
       {activeTab === 'exams' && (
         <div className="space-y-5 sm:space-y-6">
           {exams.length === 0 ? (
-            <div className="bg-white rounded-2xl sm:rounded-3xl border border-dashed border-slate-300 p-8 sm:p-12 text-center">
-              <BookOpen className="w-10 h-10 sm:w-12 sm:h-12 text-slate-300 mx-auto mb-3" />
-              <h3 className="text-sm sm:text-base font-bold text-slate-800">No Exams Created Yet</h3>
-              <p className="text-xs text-slate-400 mt-1 max-w-md mx-auto mb-4 sm:mb-5">
+            <div className="bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl border border-dashed border-slate-300 dark:border-slate-800 p-8 sm:p-12 text-center transition-colors">
+              <BookOpen className="w-10 h-10 sm:w-12 sm:h-12 text-slate-300 dark:text-slate-600 mx-auto mb-3" />
+              <h3 className="text-sm sm:text-base font-bold text-slate-800 dark:text-slate-200">No Exams Created Yet</h3>
+              <p className="text-xs text-slate-400 dark:text-slate-500 mt-1 max-w-md mx-auto mb-4 sm:mb-5">
                 Click "Create New Exam" to build multiple choice questions manually, paste questions from text, or extract them directly from PDF documents.
               </p>
               <button
@@ -291,12 +291,12 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                 return (
                   <div
                     key={exam.id}
-                    className="bg-white rounded-2xl border border-slate-200 shadow-xs hover:shadow-md transition-shadow flex flex-col justify-between overflow-hidden group"
+                    className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs hover:shadow-md dark:hover:shadow-indigo-950/20 transition-all flex flex-col justify-between overflow-hidden group"
                   >
                     {/* Card Header */}
                     <div className="p-4 sm:p-5 space-y-2.5 sm:space-y-3">
                       <div className="flex items-center justify-between gap-2">
-                        <span className="text-[10px] sm:text-[11px] font-mono font-bold tracking-wider px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200">
+                        <span className="text-[10px] sm:text-[11px] font-mono font-bold tracking-wider px-2 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-950/70 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
                           {exam.code}
                         </span>
                         
@@ -306,8 +306,8 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                           onClick={() => handleToggleStatus(exam)}
                           className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full border transition-colors cursor-pointer ${
                             exam.isActive
-                              ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
-                              : 'bg-slate-100 text-slate-500 border-slate-200 hover:bg-slate-200'
+                              ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100 dark:hover:bg-emerald-900/60'
+                              : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700'
                           }`}
                           title="Click to toggle active state"
                         >
@@ -317,40 +317,40 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                       </div>
 
                       <div>
-                        <h3 className="font-bold text-slate-900 text-sm sm:text-base leading-snug group-hover:text-indigo-600 transition-colors">
+                        <h3 className="font-bold text-slate-900 dark:text-white text-sm sm:text-base leading-snug group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
                           {exam.title}
                         </h3>
-                        <p className="text-xs text-slate-500 mt-1 line-clamp-2">
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 line-clamp-2">
                           {exam.description || 'No instructions specified.'}
                         </p>
                       </div>
 
                       {/* Meta badges */}
-                      <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 pt-1 text-[10px] sm:text-[11px] text-slate-600 font-medium">
-                        <div className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-50 border border-slate-200">
-                          <Clock className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-indigo-600" />
+                      <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 pt-1 text-[10px] sm:text-[11px] text-slate-600 dark:text-slate-300 font-medium">
+                        <div className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                          <Clock className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-indigo-600 dark:text-indigo-400" />
                           <span>{exam.durationMinutes}m</span>
                         </div>
-                        <div className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-50 border border-slate-200">
-                          <Layers className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-purple-600" />
+                        <div className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                          <Layers className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-purple-600 dark:text-purple-400" />
                           <span>{exam.questions.length} Qs</span>
                         </div>
-                        <div className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-50 border border-slate-200">
-                          <Award className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-amber-500" />
+                        <div className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                          <Award className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-amber-500 dark:text-amber-400" />
                           <span>{exam.totalMarks} Pts</span>
                         </div>
                       </div>
 
                       {/* Student Attempts Stats */}
-                      <div className="p-2 sm:p-2.5 rounded-xl bg-slate-50 border border-slate-100 text-xs flex items-center justify-between">
-                        <span className="text-slate-500 flex items-center gap-1 text-[11px]">
-                          <Users className="w-3.5 h-3.5 text-indigo-600" />
+                      <div className="p-2 sm:p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-100 dark:border-slate-800 text-xs flex items-center justify-between">
+                        <span className="text-slate-500 dark:text-slate-400 flex items-center gap-1 text-[11px]">
+                          <Users className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
                           <span>Participants:</span>
                         </span>
-                        <div className="font-bold text-slate-800 text-[11px]">
+                        <div className="font-bold text-slate-800 dark:text-slate-200 text-[11px]">
                           {examSubmissions.length} Attempt{examSubmissions.length === 1 ? '' : 's'}
                           {avgScore && (
-                            <span className="ml-1 text-[10px] font-normal text-slate-500">
+                            <span className="ml-1 text-[10px] font-normal text-slate-500 dark:text-slate-400">
                               ({avgScore}%)
                             </span>
                           )}
@@ -359,13 +359,13 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
 
                       {/* Ended status banner if exam was concluded */}
                       {exam.isEnded && (
-                        <div className="p-2 sm:p-2.5 rounded-xl bg-amber-50/80 border border-amber-200/70 text-xs flex items-center justify-between">
-                          <span className="text-amber-800 flex items-center gap-1.5 text-[11px] font-semibold">
-                            <PowerOff className="w-3.5 h-3.5 text-amber-600" />
+                        <div className="p-2 sm:p-2.5 rounded-xl bg-amber-50/80 dark:bg-amber-950/40 border border-amber-200/70 dark:border-amber-900/60 text-xs flex items-center justify-between">
+                          <span className="text-amber-800 dark:text-amber-300 flex items-center gap-1.5 text-[11px] font-semibold">
+                            <PowerOff className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
                             <span>Ended by Teacher</span>
                           </span>
                           {exam.endedAt && (
-                            <span className="text-[10px] text-amber-700 font-mono">
+                            <span className="text-[10px] text-amber-700 dark:text-amber-400 font-mono">
                               {new Date(exam.endedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                             </span>
                           )}
@@ -374,7 +374,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                     </div>
 
                     {/* Card Actions */}
-                    <div className="p-2.5 sm:p-3 bg-slate-50/80 border-t border-slate-100 flex flex-wrap items-center justify-between gap-1.5">
+                    <div className="p-2.5 sm:p-3 bg-slate-50/80 dark:bg-slate-800/50 border-t border-slate-100 dark:border-slate-800 flex flex-wrap items-center justify-between gap-1.5">
                       <div className="flex flex-wrap items-center gap-1.5">
                         {/* Direct End Exam button from teacher panel */}
                         {exam.isActive ? (
@@ -391,10 +391,10 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                           <button
                             type="button"
                             onClick={() => handleReopenExam(exam.id)}
-                            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-xs font-bold transition-colors cursor-pointer"
+                            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 text-xs font-bold transition-colors cursor-pointer"
                             title="Reopen exam for candidates"
                           >
-                            <PlayCircle className="w-3.5 h-3.5 text-emerald-600" />
+                            <PlayCircle className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
                             <span>Reopen</span>
                           </button>
                         )}
@@ -402,7 +402,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                         <button
                           type="button"
                           onClick={() => setShareModalExam(exam)}
-                          className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-semibold transition-colors cursor-pointer"
+                          className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 text-xs font-semibold transition-colors cursor-pointer"
                           title="Get Shareable Link"
                         >
                           <Share2 className="w-3.5 h-3.5" />
@@ -412,7 +412,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                         <button
                           type="button"
                           onClick={() => onStudentPortalPreview(exam.code)}
-                          className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-white text-xs font-medium transition-colors cursor-pointer"
+                          className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white dark:hover:bg-slate-700 text-xs font-medium transition-colors cursor-pointer"
                           title="Preview student exam view"
                         >
                           <ExternalLink className="w-3.5 h-3.5" />
@@ -424,7 +424,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                         <button
                           type="button"
                           onClick={() => handleEdit(exam)}
-                          className="p-1.5 rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-white transition-colors cursor-pointer"
+                          className="p-1.5 rounded-lg text-slate-500 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-white dark:hover:bg-slate-700 transition-colors cursor-pointer"
                           title="Edit Exam & Questions"
                         >
                           <Edit3 className="w-4 h-4" />
@@ -433,7 +433,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                         <button
                           type="button"
                           onClick={() => handleDelete(exam.id, exam.title)}
-                          className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                          className="p-1.5 rounded-lg text-slate-400 dark:text-slate-500 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer"
                           title="Delete Exam"
                         >
                           <Trash2 className="w-4 h-4" />
@@ -450,23 +450,23 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
 
       {/* End Exam Confirmation Modal */}
       {confirmEndExam && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs animate-fadeIn overflow-y-auto">
-          <div className="bg-white rounded-2xl sm:rounded-3xl max-w-md w-full p-5 sm:p-6 shadow-2xl border border-slate-200 space-y-4 my-auto">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 dark:bg-slate-950/80 backdrop-blur-xs animate-fadeIn overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl max-w-md w-full p-5 sm:p-6 shadow-2xl border border-slate-200 dark:border-slate-800 space-y-4 my-auto transition-colors">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
+              <div className="w-10 h-10 rounded-2xl bg-rose-100 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0 border border-rose-200 dark:border-rose-900/60">
                 <StopCircle className="w-5 h-5 stroke-[2.5]" />
               </div>
               <div className="min-w-0">
-                <h3 className="font-bold text-base text-slate-900 truncate">End Exam Session?</h3>
-                <p className="text-xs text-slate-500 font-mono truncate">{confirmEndExam.code} • {confirmEndExam.title}</p>
+                <h3 className="font-bold text-base text-slate-900 dark:text-white truncate">End Exam Session?</h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 font-mono truncate">{confirmEndExam.code} • {confirmEndExam.title}</p>
               </div>
             </div>
 
-            <div className="p-3.5 rounded-2xl bg-rose-50/70 border border-rose-100 text-xs text-rose-950 space-y-2">
-              <p className="font-bold text-rose-900">
+            <div className="p-3.5 rounded-2xl bg-rose-50/70 dark:bg-rose-950/40 border border-rose-100 dark:border-rose-900/50 text-xs text-rose-950 dark:text-rose-200 space-y-2">
+              <p className="font-bold text-rose-900 dark:text-rose-300">
                 Are you sure you want to end this exam immediately?
               </p>
-              <ul className="space-y-1 text-[11px] text-rose-800 list-disc list-inside">
+              <ul className="space-y-1 text-[11px] text-rose-800 dark:text-rose-300 list-disc list-inside">
                 <li>Active students attempting this exam will have their answers auto-submitted immediately.</li>
                 <li>New students will be blocked from starting this exam.</li>
                 <li>Final participant scorecards will be instantly updated.</li>
@@ -479,7 +479,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                 type="button"
                 onClick={() => setConfirmEndExam(null)}
                 disabled={isEndingExam}
-                className="px-4 py-2 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 font-semibold text-xs transition-colors cursor-pointer"
+                className="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 font-semibold text-xs transition-colors cursor-pointer"
               >
                 Keep Exam Running
               </button>
@@ -505,23 +505,25 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
           </div>
         </div>
       )}
+
+      {/* Share Modal */}
       {shareModalExam && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/50 backdrop-blur-xs animate-fadeIn overflow-y-auto">
-          <div className="bg-white rounded-2xl sm:rounded-3xl max-w-md w-full p-5 sm:p-6 shadow-2xl border border-slate-200 space-y-4 sm:space-y-5 my-auto max-h-[92vh] overflow-y-auto">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/50 dark:bg-slate-950/80 backdrop-blur-xs animate-fadeIn overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl max-w-md w-full p-5 sm:p-6 shadow-2xl border border-slate-200 dark:border-slate-800 space-y-4 sm:space-y-5 my-auto max-h-[92vh] overflow-y-auto transition-colors">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 min-w-0">
-                <div className="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center shrink-0">
+                <div className="w-8 h-8 rounded-lg bg-indigo-100 dark:bg-indigo-950/70 text-indigo-700 dark:text-indigo-300 flex items-center justify-center shrink-0">
                   <Share2 className="w-4 h-4" />
                 </div>
                 <div className="min-w-0">
-                  <h3 className="font-bold text-sm text-slate-900 truncate">Shareable Student Link</h3>
-                  <p className="text-[11px] text-slate-500 truncate">{shareModalExam.title}</p>
+                  <h3 className="font-bold text-sm text-slate-900 dark:text-white truncate">Shareable Student Link</h3>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">{shareModalExam.title}</p>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={() => setShareModalExam(null)}
-                className="text-slate-400 hover:text-slate-600 p-1"
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 cursor-pointer"
               >
                 ✕
               </button>
@@ -529,10 +531,10 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
 
             <div className="space-y-3">
               <div>
-                <label className="block text-[10px] sm:text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1">
+                <label className="block text-[10px] sm:text-[11px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider mb-1">
                   Unique Exam Code
                 </label>
-                <div className="flex items-center justify-between p-2.5 sm:p-3 rounded-xl bg-slate-50 border border-slate-200 font-mono text-base font-black text-indigo-900 tracking-wider">
+                <div className="flex items-center justify-between p-2.5 sm:p-3 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 font-mono text-base font-black text-indigo-900 dark:text-indigo-300 tracking-wider">
                   <span>{shareModalExam.code}</span>
                   <button
                     type="button"
@@ -541,24 +543,24 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                       setCopiedCode('code');
                       setTimeout(() => setCopiedCode(null), 2000);
                     }}
-                    className="text-xs font-sans font-semibold text-indigo-600 hover:underline flex items-center gap-1"
+                    className="text-xs font-sans font-semibold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1 cursor-pointer"
                   >
-                    {copiedCode === 'code' ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                    {copiedCode === 'code' ? <Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
                     <span>{copiedCode === 'code' ? 'Copied' : 'Copy'}</span>
                   </button>
                 </div>
               </div>
 
               <div>
-                <label className="block text-[10px] sm:text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-1">
+                <label className="block text-[10px] sm:text-[11px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider mb-1">
                   Full Direct Link (Share with Students)
                 </label>
-                <div className="p-2 sm:p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-mono text-slate-700 break-all select-all">
+                <div className="p-2 sm:p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-xs font-mono text-slate-700 dark:text-slate-300 break-all select-all">
                   {getExamLink(shareModalExam.code)}
                 </div>
               </div>
 
-              <p className="text-[10px] sm:text-[11px] text-slate-400">
+              <p className="text-[10px] sm:text-[11px] text-slate-400 dark:text-slate-500">
                 Students opening this link will immediately enter this exam with the teacher-set <strong>{shareModalExam.durationMinutes}-minute countdown timer</strong>.
               </p>
             </div>
@@ -588,7 +590,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                   setShareModalExam(null);
                   onStudentPortalPreview(shareModalExam.code);
                 }}
-                className="py-2.5 px-3.5 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 font-semibold text-xs transition-colors cursor-pointer"
+                className="py-2.5 px-3.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 font-semibold text-xs transition-colors cursor-pointer"
               >
                 Launch
               </button>
