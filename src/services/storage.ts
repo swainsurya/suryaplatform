@@ -1,10 +1,11 @@
-import { Exam, ExamSubmission } from '../types/exam';
+import { Exam, ExamSubmission, ActiveExamSession } from '../types/exam';
 
 const EXAMS_KEY = 'surya_exams_data';
 const SUBMISSIONS_KEY = 'surya_submissions_data';
 const TEACHER_AUTH_KEY = 'surya_teacher_session';
 const TEACHER_ATTEMPTS_KEY = 'surya_teacher_failed_attempts';
 const TEACHER_LOCKOUT_KEY = 'surya_teacher_lockout_until';
+const ACTIVE_EXAM_SESSION_KEY = 'surya_active_exam_session';
 
 export const TEACHER_SECRET_KEY = '7750960398';
 export const MAX_TEACHER_ATTEMPTS = 3;

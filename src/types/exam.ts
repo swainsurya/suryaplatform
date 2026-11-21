@@ -59,3 +59,16 @@ export interface ExamSubmission {
   isPassed: boolean;
   answers: QuestionAnswer[];
 }
+
+export interface ActiveExamSession {
+  exam: Exam;
+  studentName: string;
+  studentRollNumber?: string;
+  studentEmail?: string;
+  examStartTime: number; // Unix timestamp in ms
+  examEndTime: number; // Unix timestamp in ms
+  orderedQuestions: SanitizedQuestion[]; // Exact ordered questions so they never change on reload
+  userAnswers: Record<string, number | null>; // Selected answers saved in real-time
+  markedForReview: string[]; // Marked question IDs
+  currentIndex: number; // Current question index
+}
