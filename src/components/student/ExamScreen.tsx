@@ -14,7 +14,9 @@ import {
   Database,
   Sparkles,
   RefreshCw,
-  ShieldCheck
+  ShieldCheck,
+  Sun,
+  Moon
 } from 'lucide-react';
 import { Exam, SanitizedQuestion } from '../../types/exam';
 import { QuestionPalette } from './QuestionPalette';
@@ -34,7 +36,7 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
   studentName,
   onFinishExam,
 }) => {
-  const { exams, activeTestSession, updateExamProgress } = useExamStore();
+  const { exams, activeTestSession, updateExamProgress, theme, toggleTheme } = useExamStore();
 
   // Active question list restored from session so questions & order NEVER change on refresh
   const [orderedQuestions] = useState<SanitizedQuestion[]>(() => {

@@ -32,18 +32,18 @@ export const QuestionPalette: React.FC<QuestionPaletteProps> = ({
   });
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 p-3.5 sm:p-4 shadow-xs space-y-3 sm:space-y-4">
-      <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-        <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider">
+    <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-3.5 sm:p-4 shadow-xs space-y-3 sm:space-y-4 transition-colors">
+      <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+        <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">
           Question Palette
         </h4>
-        <span className="text-[11px] font-semibold text-slate-500">
+        <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">
           {currentIndex + 1} of {totalQuestions}
         </span>
       </div>
 
       {/* Legend Indicators */}
-      <div className="grid grid-cols-2 gap-1.5 sm:gap-2 text-[10px] sm:text-[11px] text-slate-600">
+      <div className="grid grid-cols-2 gap-1.5 sm:gap-2 text-[10px] sm:text-[11px] text-slate-600 dark:text-slate-300">
         <div className="flex items-center gap-1.5">
           <span className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full bg-emerald-500 shrink-0" />
           <span>Answered ({answeredCount})</span>
@@ -53,25 +53,25 @@ export const QuestionPalette: React.FC<QuestionPaletteProps> = ({
           <span>Review ({markedCount})</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <span className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full bg-slate-200 border border-slate-300 shrink-0" />
+          <span className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full bg-slate-200 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 shrink-0" />
           <span>Unanswered ({unansweredCount})</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <span className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full bg-indigo-600 ring-2 ring-indigo-200 shrink-0" />
+          <span className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full bg-indigo-600 ring-2 ring-indigo-200 dark:ring-indigo-900 shrink-0" />
           <span>Current</span>
         </div>
       </div>
 
       {/* Question Number Buttons Grid */}
-      <div className="grid grid-cols-5 sm:grid-cols-4 md:grid-cols-5 gap-1.5 sm:gap-2 pt-2 border-t border-slate-100 max-h-60 overflow-y-auto pr-0.5">
+      <div className="grid grid-cols-5 sm:grid-cols-4 md:grid-cols-5 gap-1.5 sm:gap-2 pt-2 border-t border-slate-100 dark:border-slate-800 max-h-60 overflow-y-auto pr-0.5">
         {questionIds.map((qId, idx) => {
           const isCurrent = currentIndex === idx;
           const isAnswered = userAnswers[qId] !== undefined && userAnswers[qId] !== null;
           const isMarked = markedForReview.has(qId);
 
-          let btnClasses = 'border-slate-200 bg-slate-100 text-slate-600 hover:bg-slate-200';
+          let btnClasses = 'border-slate-200 dark:border-slate-700/80 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700';
           if (isCurrent) {
-            btnClasses = 'ring-2 ring-indigo-600 bg-indigo-600 text-white font-extrabold shadow-sm';
+            btnClasses = 'ring-2 ring-indigo-600 dark:ring-indigo-400 bg-indigo-600 text-white font-extrabold shadow-sm';
           } else if (isMarked) {
             btnClasses = 'bg-amber-500 text-white font-bold border-amber-600 shadow-xs';
           } else if (isAnswered) {
@@ -88,7 +88,7 @@ export const QuestionPalette: React.FC<QuestionPaletteProps> = ({
             >
               <span>{idx + 1}</span>
               {isMarked && !isCurrent && (
-                <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-amber-400 border border-white" />
+                <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-amber-400 border border-white dark:border-slate-900" />
               )}
             </button>
           );
