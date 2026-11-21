@@ -296,62 +296,78 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
   const answeredCount = Object.keys(userAnswers).length;
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col pb-8">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col pb-8 transition-colors duration-200">
       
       {/* Responsive Exam Header Bar */}
-      <header className="sticky top-0 z-30 bg-white border-b border-slate-200 shadow-xs">
-        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-2.5 sm:py-3 flex flex-wrap items-center justify-between gap-2">
+      <header className="sticky top-0 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 shadow-xs transition-colors">
+        <div className="max-w-7xl mx-auto px-2.5 sm:px-6 lg:px-8 py-2 sm:py-3 flex items-center justify-between gap-2">
           
           {/* Exam info (Compact on mobile) */}
-          <div className="min-w-0 max-w-[55%] sm:max-w-none">
+          <div className="min-w-0 max-w-[48%] sm:max-w-none">
             <div className="flex items-center gap-1.5 sm:gap-2">
-              <span className="text-[10px] sm:text-xs font-mono px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 font-bold border border-indigo-200 shrink-0">
+              <span className="text-[10px] sm:text-xs font-mono px-1.5 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/70 text-indigo-700 dark:text-indigo-300 font-bold border border-indigo-200 dark:border-indigo-800 shrink-0">
                 {exam.code}
               </span>
-              <h2 className="font-bold text-slate-900 text-xs sm:text-base leading-tight truncate">
+              <h2 className="font-bold text-slate-900 dark:text-white text-xs sm:text-base leading-tight truncate">
                 {exam.title}
               </h2>
             </div>
-            <p className="text-[11px] text-slate-500 truncate mt-0.5">
-              Candidate: <strong className="text-slate-800">{studentName}</strong>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate mt-0.5">
+              Candidate: <strong className="text-slate-800 dark:text-slate-200">{studentName}</strong>
             </p>
           </div>
 
-          {/* Right Action Cluster: Mobile Palette Toggle + Timer + Submit */}
-          <div className="flex items-center gap-2 sm:gap-3 shrink-0 ml-auto">
+          {/* Right Action Cluster: Mobile Palette Toggle + Theme + Timer + Submit */}
+          <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0 ml-auto">
+            
             {/* Mobile-only Palette Trigger Pill */}
             <button
               type="button"
               onClick={() => setShowMobilePalette(!showMobilePalette)}
-              className="lg:hidden flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-indigo-50 text-indigo-700 border border-indigo-200 text-xs font-bold"
+              className="lg:hidden flex items-center gap-1 px-2 py-1.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/70 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 text-xs font-bold"
               title="Toggle Question Palette"
             >
               <Layers className="w-3.5 h-3.5" />
               <span>{currentIndex + 1}/{orderedQuestions.length}</span>
             </button>
 
+            {/* Dark / Light Mode Quick Toggle */}
+            <button
+              type="button"
+              onClick={toggleTheme}
+              aria-label="Toggle Theme"
+              title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
+              className="p-1.5 sm:p-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-amber-400 transition-colors cursor-pointer"
+            >
+              {theme === 'dark' ? (
+                <Sun className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-400" />
+              ) : (
+                <Moon className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-600" />
+              )}
+            </button>
+
             {/* In-Exam Instructions Button */}
             <button
               type="button"
               onClick={() => setShowInstructionsModal(true)}
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold transition-colors cursor-pointer"
+              className="flex items-center gap-1 px-2 sm:px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-semibold transition-colors cursor-pointer"
               title="Review Exam Rules & Instructions"
             >
-              <HelpCircle className="w-3.5 h-3.5 text-indigo-600" />
-              <span className="hidden sm:inline">Instructions</span>
+              <HelpCircle className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+              <span className="hidden sm:inline">Rules</span>
             </button>
 
             {/* Countdown Timer */}
             <div
-              className={`flex items-center gap-1.5 px-2.5 sm:px-3.5 py-1.5 rounded-xl border font-mono font-black text-xs sm:text-sm transition-all shadow-xs ${
+              className={`flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl border font-mono font-black text-xs sm:text-sm transition-all shadow-xs ${
                 isTimeUrgent
-                  ? 'bg-rose-50 border-rose-300 text-rose-700 animate-pulse'
+                  ? 'bg-rose-50 dark:bg-rose-950/60 border-rose-300 dark:border-rose-800 text-rose-700 dark:text-rose-300 animate-pulse'
                   : isTimeWarning
-                  ? 'bg-amber-50 border-amber-300 text-amber-800'
-                  : 'bg-slate-900 text-white border-slate-800'
+                  ? 'bg-amber-50 dark:bg-amber-950/60 border-amber-300 dark:border-amber-800 text-amber-800 dark:text-amber-300'
+                  : 'bg-slate-900 dark:bg-slate-800 text-white border-slate-800 dark:border-slate-700'
               }`}
             >
-              <Clock className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${isTimeUrgent ? 'text-rose-600' : 'text-indigo-400'}`} />
+              <Clock className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${isTimeUrgent ? 'text-rose-600 dark:text-rose-400' : 'text-indigo-400'}`} />
               <span>{formatTimer(secondsRemaining)}</span>
             </div>
 
@@ -359,7 +375,7 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
             <button
               type="button"
               onClick={() => setShowSubmitModal(true)}
-              className="flex items-center gap-1 sm:gap-1.5 px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs sm:text-sm shadow-xs transition-colors cursor-pointer"
+              className="flex items-center gap-1 sm:gap-1.5 px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold text-xs sm:text-sm shadow-xs transition-all cursor-pointer"
             >
               <Send className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               <span className="hidden xs:inline">Submit</span>
@@ -371,9 +387,9 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
 
       {/* Tab Switch Warning Banner */}
       {showTabWarning && (
-        <div className="bg-amber-50 border-b border-amber-200 px-3 sm:px-4 py-2 text-xs text-amber-800 flex items-center justify-between">
+        <div className="bg-amber-50 dark:bg-amber-950/50 border-b border-amber-200 dark:border-amber-900/60 px-3 sm:px-4 py-2 text-xs text-amber-800 dark:text-amber-200 flex items-center justify-between">
           <div className="flex items-center gap-2 max-w-5xl mx-auto">
-            <ShieldAlert className="w-4 h-4 text-amber-600 shrink-0" />
+            <ShieldAlert className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
             <span className="text-[11px] sm:text-xs">
               <strong>Warning:</strong> Tab change detected ({tabSwitchCount} time{tabSwitchCount > 1 ? 's' : ''}). Stay on this window.
             </span>
@@ -381,7 +397,7 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
           <button
             type="button"
             onClick={() => setShowTabWarning(false)}
-            className="text-amber-600 hover:text-amber-800 p-1"
+            className="text-amber-600 dark:text-amber-400 hover:text-amber-800 dark:hover:text-amber-200 p-1"
           >
             <X className="w-3.5 h-3.5" />
           </button>
@@ -394,16 +410,16 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
         {/* Left 2 Cols: Question Card */}
         <div className="lg:col-span-2 space-y-4 sm:space-y-5">
           {currentQuestion && (
-            <div className="bg-white rounded-2xl sm:rounded-3xl border border-slate-200 p-4 sm:p-7 shadow-xs flex flex-col justify-between min-h-[420px] sm:min-h-[460px]">
+            <div className="bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl border border-slate-200 dark:border-slate-800 p-4 sm:p-7 shadow-xs flex flex-col justify-between min-h-[400px] sm:min-h-[460px] transition-colors">
               
               {/* Question Meta & Actions */}
               <div>
-                <div className="flex flex-wrap items-center justify-between gap-2 pb-3.5 border-b border-slate-100 mb-4 sm:mb-6">
+                <div className="flex flex-wrap items-center justify-between gap-2 pb-3.5 border-b border-slate-100 dark:border-slate-800 mb-4 sm:mb-6">
                   <div className="flex items-center gap-2">
-                    <span className="px-2.5 py-1 rounded-lg bg-indigo-50 text-indigo-700 font-extrabold text-xs">
+                    <span className="px-2.5 py-1 rounded-lg bg-indigo-50 dark:bg-indigo-950/70 text-indigo-700 dark:text-indigo-300 font-extrabold text-xs">
                       Q {currentIndex + 1} of {orderedQuestions.length}
                     </span>
-                    <span className="text-[11px] sm:text-xs font-semibold text-slate-500">
+                    <span className="text-[11px] sm:text-xs font-semibold text-slate-500 dark:text-slate-400">
                       ({currentQuestion.marks || 1} Pt{currentQuestion.marks > 1 ? 's' : ''})
                     </span>
                   </div>
@@ -415,11 +431,11 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
                       onClick={handleToggleMarkForReview}
                       className={`flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-semibold border transition-all cursor-pointer ${
                         markedForReview.has(currentQuestion.id)
-                          ? 'bg-amber-50 text-amber-800 border-amber-300 ring-1 ring-amber-300'
-                          : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                          ? 'bg-amber-50 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-800 ring-1 ring-amber-300 dark:ring-amber-700'
+                          : 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700'
                       }`}
                     >
-                      <Bookmark className="w-3.5 h-3.5 text-amber-600" />
+                      <Bookmark className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
                       <span className="text-[11px] sm:text-xs">
                         {markedForReview.has(currentQuestion.id) ? 'Review' : 'Mark Review'}
                       </span>
@@ -430,7 +446,7 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
                       <button
                         type="button"
                         onClick={handleClearResponse}
-                        className="text-[11px] sm:text-xs text-rose-600 hover:underline px-1.5 py-1"
+                        className="text-[11px] sm:text-xs text-rose-600 dark:text-rose-400 hover:underline px-1.5 py-1 cursor-pointer"
                       >
                         Clear
                       </button>
@@ -439,7 +455,7 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
                 </div>
 
                 {/* Question Statement */}
-                <h3 className="text-sm sm:text-lg font-bold text-slate-900 leading-snug sm:leading-relaxed mb-4 sm:mb-6">
+                <h3 className="text-sm sm:text-lg font-bold text-slate-900 dark:text-white leading-snug sm:leading-relaxed mb-4 sm:mb-6">
                   {currentQuestion.questionText}
                 </h3>
 
@@ -455,20 +471,20 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
                         onClick={() => handleSelectOption(optIdx)}
                         className={`p-3 sm:p-4 rounded-xl sm:rounded-2xl border transition-all cursor-pointer flex items-center gap-3 select-none active:scale-[0.99] ${
                           isSelected
-                            ? 'border-indigo-600 bg-indigo-50/70 shadow-xs ring-2 ring-indigo-600/20'
-                            : 'border-slate-200 bg-slate-50/60 hover:bg-white hover:border-slate-300'
+                            ? 'border-indigo-600 dark:border-indigo-500 bg-indigo-50/70 dark:bg-indigo-950/50 shadow-xs ring-2 ring-indigo-600/20 dark:ring-indigo-500/30'
+                            : 'border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/40 hover:bg-white dark:hover:bg-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
                         }`}
                       >
                         <div
                           className={`w-7 h-7 sm:w-8 sm:h-8 rounded-lg sm:rounded-xl flex items-center justify-center font-bold text-xs shrink-0 transition-colors ${
                             isSelected
                               ? 'bg-indigo-600 text-white shadow-xs'
-                              : 'bg-white border border-slate-300 text-slate-600'
+                              : 'bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300'
                           }`}
                         >
                           {isSelected ? <CheckCircle2 className="w-4 h-4 text-white" /> : letter}
                         </div>
-                        <span className={`text-xs sm:text-sm leading-snug flex-1 ${isSelected ? 'font-bold text-indigo-950' : 'text-slate-700'}`}>
+                        <span className={`text-xs sm:text-sm leading-snug flex-1 ${isSelected ? 'font-bold text-indigo-950 dark:text-indigo-200' : 'text-slate-700 dark:text-slate-300'}`}>
                           {opt}
                         </span>
                       </div>
@@ -478,12 +494,12 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
               </div>
 
               {/* Bottom Nav Controls */}
-              <div className="pt-5 border-t border-slate-100 flex items-center justify-between gap-2 mt-5">
+              <div className="pt-5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2 mt-5">
                 <button
                   type="button"
                   disabled={currentIndex === 0}
                   onClick={() => handleNavigateQuestion(currentIndex - 1)}
-                  className="flex items-center gap-1 sm:gap-1.5 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl border border-slate-200 text-slate-700 font-semibold text-xs hover:bg-slate-100 disabled:opacity-40 disabled:pointer-events-none transition-colors cursor-pointer"
+                  className="flex items-center gap-1 sm:gap-1.5 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-semibold text-xs hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-40 disabled:pointer-events-none transition-colors cursor-pointer"
                 >
                   <ChevronLeft className="w-4 h-4" />
                   <span>Prev</span>
@@ -494,7 +510,7 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
                     <button
                       type="button"
                       onClick={() => handleNavigateQuestion(currentIndex + 1)}
-                      className="flex items-center gap-1 sm:gap-1.5 px-4 sm:px-6 py-2 sm:py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-xs transition-colors cursor-pointer"
+                      className="flex items-center gap-1 sm:gap-1.5 px-4 sm:px-6 py-2 sm:py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white font-bold text-xs shadow-xs transition-all cursor-pointer"
                     >
                       <span>Next</span>
                       <ChevronRight className="w-4 h-4" />
@@ -503,7 +519,7 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
                     <button
                       type="button"
                       onClick={() => setShowSubmitModal(true)}
-                      className="flex items-center gap-1 sm:gap-1.5 px-4 sm:px-6 py-2 sm:py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs transition-colors cursor-pointer"
+                      className="flex items-center gap-1 sm:gap-1.5 px-4 sm:px-6 py-2 sm:py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold text-xs shadow-xs transition-all cursor-pointer"
                     >
                       <Send className="w-4 h-4" />
                       <span>Review & Submit</span>
@@ -528,12 +544,12 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
           />
 
           {/* Guidelines Box */}
-          <div className="bg-slate-100/80 rounded-2xl p-4 text-xs text-slate-600 space-y-2 border border-slate-200">
-            <h5 className="font-bold text-slate-800 flex items-center gap-1.5">
-              <HelpCircle className="w-4 h-4 text-indigo-600" />
+          <div className="bg-slate-100/80 dark:bg-slate-900/80 rounded-2xl p-4 text-xs text-slate-600 dark:text-slate-400 space-y-2 border border-slate-200 dark:border-slate-800 transition-colors">
+            <h5 className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+              <HelpCircle className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
               <span>Exam Rules & Tips</span>
             </h5>
-            <ul className="list-disc pl-4 space-y-1 text-slate-500 text-[11px]">
+            <ul className="list-disc pl-4 space-y-1 text-slate-500 dark:text-slate-400 text-[11px]">
               <li>Exam automatically submits when timer expires.</li>
               <li>You can modify your responses at any time.</li>
               <li>Palette numbers let you jump directly to any question.</li>
@@ -545,17 +561,17 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
 
       {/* Mobile Slide-Up / Bottom-Sheet Palette Drawer */}
       {showMobilePalette && (
-        <div className="lg:hidden fixed inset-0 z-50 flex flex-col justify-end bg-slate-900/60 backdrop-blur-xs animate-fadeIn">
-          <div className="bg-white rounded-t-3xl max-h-[80vh] overflow-y-auto p-4 sm:p-6 shadow-2xl border-t border-slate-200 space-y-4">
-            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-              <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                <Layers className="w-4 h-4 text-indigo-600" />
+        <div className="lg:hidden fixed inset-0 z-50 flex flex-col justify-end bg-slate-900/60 dark:bg-slate-950/80 backdrop-blur-xs animate-fadeIn">
+          <div className="bg-white dark:bg-slate-900 rounded-t-3xl max-h-[80vh] overflow-y-auto p-4 sm:p-6 shadow-2xl border-t border-slate-200 dark:border-slate-800 space-y-4">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+              <h4 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <Layers className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
                 <span>Question Navigator ({answeredCount}/{orderedQuestions.length} Answered)</span>
               </h4>
               <button
                 type="button"
                 onClick={() => setShowMobilePalette(false)}
-                className="p-1 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100"
+                className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -573,7 +589,7 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
             <button
               type="button"
               onClick={() => setShowMobilePalette(false)}
-              className="w-full py-2.5 rounded-xl bg-slate-100 text-slate-700 text-xs font-bold"
+              className="w-full py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-bold hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
             >
               Close Navigator
             </button>
@@ -583,44 +599,44 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
 
       {/* In-Exam Instructions Modal */}
       {showInstructionsModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs animate-fadeIn overflow-y-auto">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-5 sm:p-6 shadow-2xl border border-slate-200 space-y-4 my-auto max-h-[90vh] overflow-y-auto">
-            <div className="flex items-start justify-between pb-2 border-b border-slate-100">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 dark:bg-slate-950/80 backdrop-blur-xs animate-fadeIn overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-lg w-full p-5 sm:p-6 shadow-2xl border border-slate-200 dark:border-slate-800 space-y-4 my-auto max-h-[90vh] overflow-y-auto transition-colors">
+            <div className="flex items-start justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
               <div>
-                <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-200">
+                <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/70 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
                   {exam.code}
                 </span>
-                <h3 className="text-base sm:text-lg font-bold text-slate-900 mt-1">
+                <h3 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white mt-1">
                   Exam Instructions & Rules
                 </h3>
               </div>
               <button
                 type="button"
                 onClick={() => setShowInstructionsModal(false)}
-                className="p-1 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100"
+                className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="grid grid-cols-3 gap-2 text-center text-xs p-3 rounded-2xl bg-slate-50 border border-slate-200">
+            <div className="grid grid-cols-3 gap-2 text-center text-xs p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700">
               <div>
-                <span className="text-[10px] text-slate-400 uppercase font-semibold block">Duration</span>
-                <span className="font-black text-indigo-900">{exam.durationMinutes}m</span>
+                <span className="text-[10px] text-slate-400 dark:text-slate-500 uppercase font-semibold block">Duration</span>
+                <span className="font-black text-indigo-900 dark:text-indigo-300">{exam.durationMinutes}m</span>
               </div>
               <div>
-                <span className="text-[10px] text-slate-400 uppercase font-semibold block">Questions</span>
-                <span className="font-black text-indigo-900">{orderedQuestions.length} MCQs</span>
+                <span className="text-[10px] text-slate-400 dark:text-slate-500 uppercase font-semibold block">Questions</span>
+                <span className="font-black text-indigo-900 dark:text-indigo-300">{orderedQuestions.length} MCQs</span>
               </div>
               <div>
-                <span className="text-[10px] text-slate-400 uppercase font-semibold block">Negative Mark</span>
-                <span className="font-black text-rose-600">{exam.negativeMarking > 0 ? `-${exam.negativeMarking}` : 'None'}</span>
+                <span className="text-[10px] text-slate-400 dark:text-slate-500 uppercase font-semibold block">Negative Mark</span>
+                <span className="font-black text-rose-600 dark:text-rose-400">{exam.negativeMarking > 0 ? `-${exam.negativeMarking}` : 'None'}</span>
               </div>
             </div>
 
-            <div className="space-y-2 text-xs text-slate-600">
-              <h4 className="font-bold text-slate-900">Key Guidelines:</h4>
-              <ul className="list-disc pl-4 space-y-1 text-[11px] text-slate-600">
+            <div className="space-y-2 text-xs text-slate-600 dark:text-slate-300">
+              <h4 className="font-bold text-slate-900 dark:text-white">Key Guidelines:</h4>
+              <ul className="list-disc pl-4 space-y-1 text-[11px] text-slate-600 dark:text-slate-300">
                 <li>Selected answers save automatically. You may modify choices anytime before final submit.</li>
                 <li>When the timer hits 0:00, or if concluded by the teacher, the exam auto-submits.</li>
                 <li>Palette numbers allow jumping directly to any question.</li>
@@ -631,7 +647,7 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
             <button
               type="button"
               onClick={() => setShowInstructionsModal(false)}
-              className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-xs transition-colors cursor-pointer"
+              className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:scale-[0.99] text-white font-bold text-xs shadow-xs transition-colors cursor-pointer"
             >
               Return to Exam Questions
             </button>
@@ -641,35 +657,35 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
 
       {/* Confirmation Modal before Submit */}
       {showSubmitModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs animate-fadeIn">
-          <div className="bg-white rounded-3xl max-w-md w-full p-5 sm:p-6 shadow-2xl border border-slate-200 space-y-4 sm:space-y-5">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 dark:bg-slate-950/80 backdrop-blur-xs animate-fadeIn">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-md w-full p-5 sm:p-6 shadow-2xl border border-slate-200 dark:border-slate-800 space-y-4 sm:space-y-5 transition-colors">
             <div className="text-center">
-              <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto mb-2.5 sm:mb-3 border border-emerald-200 shadow-xs">
+              <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mx-auto mb-2.5 sm:mb-3 border border-emerald-200 dark:border-emerald-800 shadow-xs">
                 <Send className="w-6 h-6 sm:w-7 sm:h-7" />
               </div>
-              <h3 className="text-base sm:text-lg font-bold text-slate-900">Confirm Exam Submission</h3>
-              <p className="text-xs text-slate-500 mt-1">
+              <h3 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white">Confirm Exam Submission</h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
                 Are you ready to submit? You will immediately receive your final scorecard.
               </p>
             </div>
 
             {/* Submission Stats Breakdown */}
-            <div className="grid grid-cols-3 gap-2 text-center p-3 rounded-2xl bg-slate-50 border border-slate-200 text-xs">
+            <div className="grid grid-cols-3 gap-2 text-center p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-xs">
               <div>
-                <span className="text-[10px] text-slate-400 font-semibold block uppercase">Answered</span>
-                <span className="text-base font-black text-emerald-600">
+                <span className="text-[10px] text-slate-400 dark:text-slate-500 font-semibold block uppercase">Answered</span>
+                <span className="text-base font-black text-emerald-600 dark:text-emerald-400">
                   {answeredCount}
                 </span>
               </div>
               <div>
-                <span className="text-[10px] text-slate-400 font-semibold block uppercase">Unanswered</span>
-                <span className="text-base font-black text-slate-600">
+                <span className="text-[10px] text-slate-400 dark:text-slate-500 font-semibold block uppercase">Unanswered</span>
+                <span className="text-base font-black text-slate-600 dark:text-slate-400">
                   {orderedQuestions.length - answeredCount}
                 </span>
               </div>
               <div>
-                <span className="text-[10px] text-slate-400 font-semibold block uppercase">Review</span>
-                <span className="text-base font-black text-amber-600">
+                <span className="text-[10px] text-slate-400 dark:text-slate-500 font-semibold block uppercase">Review</span>
+                <span className="text-base font-black text-amber-600 dark:text-amber-400">
                   {markedForReview.size}
                 </span>
               </div>
@@ -679,7 +695,7 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
               <button
                 type="button"
                 onClick={() => setShowSubmitModal(false)}
-                className="flex-1 py-2.5 rounded-xl border border-slate-300 text-slate-700 hover:bg-slate-50 font-semibold text-xs transition-colors cursor-pointer"
+                className="flex-1 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 font-semibold text-xs transition-colors cursor-pointer"
               >
                 Continue
               </button>
@@ -689,7 +705,7 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
                   setShowSubmitModal(false);
                   handleFinalSubmit();
                 }}
-                className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs transition-colors cursor-pointer"
+                className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] text-white font-bold text-xs shadow-xs transition-colors cursor-pointer"
               >
                 Yes, Submit
               </button>
@@ -700,20 +716,20 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
 
       {/* Teacher Ended Exam Modal Notice */}
       {endedByTeacherNotice && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 text-center space-y-4 shadow-2xl border border-rose-100">
-            <div className="w-16 h-16 rounded-2xl bg-rose-100 text-rose-600 mx-auto flex items-center justify-center">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/80 dark:bg-slate-950/90 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-md w-full p-6 text-center space-y-4 shadow-2xl border border-rose-100 dark:border-rose-900/40 transition-colors">
+            <div className="w-16 h-16 rounded-2xl bg-rose-100 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 mx-auto flex items-center justify-center border border-rose-200 dark:border-rose-900/60">
               <AlertTriangle className="w-8 h-8 animate-pulse" />
             </div>
             <div className="space-y-1.5">
-              <h3 className="text-xl font-black text-slate-900">Exam Ended by Instructor</h3>
-              <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+              <h3 className="text-xl font-black text-slate-900 dark:text-white">Exam Ended by Instructor</h3>
+              <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
                 Your instructor has officially ended this exam session from the teacher panel.
                 Your answers recorded up to this moment are being automatically submitted.
               </p>
             </div>
-            <div className="flex items-center justify-center gap-2 text-xs font-semibold text-indigo-600 py-2">
-              <div className="w-4 h-4 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+            <div className="flex items-center justify-center gap-2 text-xs font-semibold text-indigo-600 dark:text-indigo-400 py-2">
+              <div className="w-4 h-4 border-2 border-indigo-600 dark:border-indigo-400 border-t-transparent rounded-full animate-spin" />
               <span>Finalizing and submitting your scorecard...</span>
             </div>
           </div>
@@ -723,7 +739,7 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
       {/* High-Tech Assessment Submission & DB Sync Loading Overlay */}
       {isSubmitting && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md animate-fadeIn">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 text-center space-y-5 sm:space-y-6 shadow-2xl border border-slate-100 relative overflow-hidden">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-md w-full p-6 sm:p-8 text-center space-y-5 sm:space-y-6 shadow-2xl border border-slate-100 dark:border-slate-800 relative overflow-hidden transition-colors">
             
             {/* Top Glowing Animated Gradient Bar */}
             <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-indigo-500 via-purple-500 to-emerald-500 animate-pulse" />
@@ -748,21 +764,21 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
 
             {/* Status Titles */}
             <div className="space-y-1.5">
-              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-50 border border-indigo-200 text-indigo-700 text-xs font-bold">
-                <Database className="w-3.5 h-3.5 text-indigo-600" />
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-50 dark:bg-indigo-950/70 border border-indigo-200 dark:border-indigo-800 text-indigo-700 dark:text-indigo-300 text-xs font-bold">
+                <Database className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
                 <span>Cloud Database Sync Active</span>
               </div>
-              <h3 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
+              <h3 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight">
                 Submitting Assessment
               </h3>
-              <p className="text-xs sm:text-sm text-slate-600 min-h-[38px] flex items-center justify-center font-medium transition-all px-2">
+              <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 min-h-[38px] flex items-center justify-center font-medium transition-all px-2">
                 {submitStatusText}
               </p>
             </div>
 
             {/* Stepper Progress Bar */}
             <div className="space-y-2">
-              <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden p-0.5 border border-slate-200">
+              <div className="w-full bg-slate-100 dark:bg-slate-800 h-2.5 rounded-full overflow-hidden p-0.5 border border-slate-200 dark:border-slate-700">
                 <div 
                   className="bg-gradient-to-r from-indigo-600 via-purple-600 to-emerald-500 h-full rounded-full transition-all duration-700 ease-out"
                   style={{ width: `${submitStage === 1 ? '38%' : submitStage === 2 ? '74%' : '100%'}` }}
@@ -770,25 +786,25 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
               </div>
 
               {/* 3 Step Pill Indicators */}
-              <div className="grid grid-cols-3 gap-1 pt-1 text-[10px] font-semibold text-slate-500">
-                <div className={`flex items-center justify-center gap-1 ${submitStage >= 1 ? 'text-indigo-600 font-bold' : ''}`}>
-                  <span className={`w-1.5 h-1.5 rounded-full ${submitStage >= 1 ? 'bg-indigo-600 animate-pulse' : 'bg-slate-300'}`} />
+              <div className="grid grid-cols-3 gap-1 pt-1 text-[10px] font-semibold text-slate-500 dark:text-slate-400">
+                <div className={`flex items-center justify-center gap-1 ${submitStage >= 1 ? 'text-indigo-600 dark:text-indigo-400 font-bold' : ''}`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${submitStage >= 1 ? 'bg-indigo-600 dark:bg-indigo-400 animate-pulse' : 'bg-slate-300 dark:bg-slate-600'}`} />
                   <span>1. Packaging</span>
                 </div>
-                <div className={`flex items-center justify-center gap-1 ${submitStage >= 2 ? 'text-purple-600 font-bold' : ''}`}>
-                  <span className={`w-1.5 h-1.5 rounded-full ${submitStage >= 2 ? 'bg-purple-600 animate-pulse' : 'bg-slate-300'}`} />
+                <div className={`flex items-center justify-center gap-1 ${submitStage >= 2 ? 'text-purple-600 dark:text-purple-400 font-bold' : ''}`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${submitStage >= 2 ? 'bg-purple-600 dark:bg-purple-400 animate-pulse' : 'bg-slate-300 dark:bg-slate-600'}`} />
                   <span>2. DB Sync</span>
                 </div>
-                <div className={`flex items-center justify-center gap-1 ${submitStage >= 3 ? 'text-emerald-600 font-bold' : ''}`}>
-                  <span className={`w-1.5 h-1.5 rounded-full ${submitStage >= 3 ? 'bg-emerald-600 animate-pulse' : 'bg-slate-300'}`} />
+                <div className={`flex items-center justify-center gap-1 ${submitStage >= 3 ? 'text-emerald-600 dark:text-emerald-400 font-bold' : ''}`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${submitStage >= 3 ? 'bg-emerald-600 dark:bg-emerald-400 animate-pulse' : 'bg-slate-300 dark:bg-slate-600'}`} />
                   <span>3. Scorecard</span>
                 </div>
               </div>
             </div>
 
             {/* Reassurance Footer */}
-            <div className="pt-2 border-t border-slate-100 flex items-center justify-center gap-1.5 text-[11px] text-slate-400">
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+            <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-center gap-1.5 text-[11px] text-slate-400 dark:text-slate-500">
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
               <span>Verified and securely synced with Firebase Firestore</span>
             </div>
 
