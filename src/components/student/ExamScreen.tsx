@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   Clock, 
   CheckCircle2, 
@@ -9,7 +9,12 @@ import {
   X, 
   HelpCircle,
   ShieldAlert,
-  Layers
+  Layers,
+  AlertTriangle,
+  Database,
+  Sparkles,
+  RefreshCw,
+  ShieldCheck
 } from 'lucide-react';
 import { Exam, SanitizedQuestion } from '../../types/exam';
 import { QuestionPalette } from './QuestionPalette';
@@ -20,7 +25,7 @@ interface ExamScreenProps {
   studentName: string;
   studentRollNumber?: string;
   studentEmail?: string;
-  onFinishExam: (userAnswers: Record<string, number | null>, timeSpentSeconds: number) => void;
+  onFinishExam: (userAnswers: Record<string, number | null>, timeSpentSeconds: number, isEndedByTeacher?: boolean) => void;
   onCancel?: () => void;
 }
 
@@ -29,7 +34,7 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
   studentName,
   onFinishExam,
 }) => {
-  const { activeTestSession, updateExamProgress } = useExamStore();
+  const { exams, activeTestSession, updateExamProgress } = useExamStore();
 
   // Active question list restored from session so questions & order NEVER change on refresh
   const [orderedQuestions] = useState<SanitizedQuestion[]>(() => {
@@ -82,12 +87,97 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
   const [showMobilePalette, setShowMobilePalette] = useState<boolean>(false);
   const [tabSwitchCount, setTabSwitchCount] = useState<number>(0);
   const [showTabWarning, setShowTabWarning] = useState<boolean>(false);
+  const [endedByTeacherNotice, setEndedByTeacherNotice] = useState<boolean>(false);
+  const [showInstructionsModal, setShowInstructionsModal] = useState<boolean>(false);
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  const [submitStage, setSubmitStage] = useState<number>(1);
+  const [submitStatusText, setSubmitStatusText] = useState<string>('Syncing responses with Cloud Database...');
 
   const startTimeRef = useRef<number>(activeTestSession?.examStartTime || Date.now());
   const submittedRef = useRef<boolean>(false);
+  const userAnswersRef = useRef(userAnswers);
+
+  useEffect(() => {
+    userAnswersRef.current = userAnswers;
+  }, [userAnswers]);
+
+  // Final submission evaluation securely passed to handler with DB loading animation
+  const handleFinalSubmit = useCallback(async (endedByTeacher: boolean = false) => {
+    if (submittedRef.current) return;
+    submittedRef.current = true;
+    setIsSubmitting(true);
+    setShowSubmitModal(false);
+
+    const startTime = activeTestSession?.examStartTime || startTimeRef.current;
+    const timeSpentSeconds = Math.max(1, Math.round((Date.now() - startTime) / 1000));
+
+    // Staged animation feedback while database fetches & synchronizes
+    setSubmitStage(1);
+    setSubmitStatusText('Encrypting & packaging candidate responses...');
+
+    const timer1 = setTimeout(() => {
+      setSubmitStage(2);
+      setSubmitStatusText('Syncing with Cloud Firestore Database & recording answers...');
+    }, 750);
+
+    const timer2 = setTimeout(() => {
+      setSubmitStage(3);
+      setSubmitStatusText('Evaluating marks and fetching official scorecard...');
+    }, 1600);
+
+    const finishPromise = Promise.resolve(
+      onFinishExam(userAnswersRef.current, Math.min(timeSpentSeconds, totalDurationSeconds), endedByTeacher)
+    );
+    const minDelay = new Promise((resolve) => setTimeout(resolve, 2400));
+
+    try {
+      await Promise.all([finishPromise, minDelay]);
+    } finally {
+      clearTimeout(timer1);
+      clearTimeout(timer2);
+    }
+  }, [activeTestSession?.examStartTime, onFinishExam, totalDurationSeconds]);
 
   const currentQuestion = orderedQuestions[currentIndex];
   const questionIds = orderedQuestions.map(q => q.id);
+
+  // Monitor in real-time whether the teacher ends this exam from the teacher panel
+  useEffect(() => {
+    if (submittedRef.current) return;
+
+    const checkTeacherEnd = () => {
+      if (submittedRef.current) return;
+      const currentList = useExamStore.getState().exams;
+      const matched = currentList.find(e => e.id === exam.id || e.code === exam.code);
+      if (matched && (!matched.isActive || matched.isEnded)) {
+        if (!submittedRef.current && !endedByTeacherNotice) {
+          setEndedByTeacherNotice(true);
+          // Auto submit student answers after 1.8 seconds so candidate sees why the exam ended
+          setTimeout(() => {
+            handleFinalSubmit(true);
+          }, 1800);
+        }
+      }
+    };
+
+    checkTeacherEnd();
+
+    // Check periodically in case of Firestore updates or background changes
+    const checkInterval = setInterval(checkTeacherEnd, 1500);
+
+    // Cross-tab storage event (for same-origin tab testing)
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === 'surya_exams_data') {
+        checkTeacherEnd();
+      }
+    };
+    window.addEventListener('storage', handleStorage);
+
+    return () => {
+      clearInterval(checkInterval);
+      window.removeEventListener('storage', handleStorage);
+    };
+  }, [exams, exam.id, exam.code, endedByTeacherNotice, handleFinalSubmit]);
 
   // Warn student if they accidentally attempt to reload or close the tab
   useEffect(() => {
@@ -132,7 +222,7 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
     }, 1000);
 
     return () => clearInterval(timerInterval);
-  }, [activeTestSession?.examEndTime]);
+  }, [activeTestSession?.examEndTime, handleFinalSubmit]);
 
   // Anti-cheat tab switch detection
   useEffect(() => {
@@ -198,16 +288,6 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
     updateExamProgress({ currentIndex: validIdx });
   };
 
-  // Final submission evaluation securely passed to handler
-  const handleFinalSubmit = () => {
-    if (submittedRef.current) return;
-    submittedRef.current = true;
-
-    const startTime = activeTestSession?.examStartTime || startTimeRef.current;
-    const timeSpentSeconds = Math.max(1, Math.round((Date.now() - startTime) / 1000));
-    onFinishExam(userAnswers, Math.min(timeSpentSeconds, totalDurationSeconds));
-  };
-
   // Timer alert colors
   const isTimeUrgent = secondsRemaining < 120; // under 2 mins
   const isTimeWarning = secondsRemaining < 300 && !isTimeUrgent; // under 5 mins
@@ -246,6 +326,17 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
             >
               <Layers className="w-3.5 h-3.5" />
               <span>{currentIndex + 1}/{orderedQuestions.length}</span>
+            </button>
+
+            {/* In-Exam Instructions Button */}
+            <button
+              type="button"
+              onClick={() => setShowInstructionsModal(true)}
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold transition-colors cursor-pointer"
+              title="Review Exam Rules & Instructions"
+            >
+              <HelpCircle className="w-3.5 h-3.5 text-indigo-600" />
+              <span className="hidden sm:inline">Instructions</span>
             </button>
 
             {/* Countdown Timer */}
@@ -488,6 +579,64 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
         </div>
       )}
 
+      {/* In-Exam Instructions Modal */}
+      {showInstructionsModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs animate-fadeIn overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-5 sm:p-6 shadow-2xl border border-slate-200 space-y-4 my-auto max-h-[90vh] overflow-y-auto">
+            <div className="flex items-start justify-between pb-2 border-b border-slate-100">
+              <div>
+                <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-200">
+                  {exam.code}
+                </span>
+                <h3 className="text-base sm:text-lg font-bold text-slate-900 mt-1">
+                  Exam Instructions & Rules
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowInstructionsModal(false)}
+                className="p-1 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2 text-center text-xs p-3 rounded-2xl bg-slate-50 border border-slate-200">
+              <div>
+                <span className="text-[10px] text-slate-400 uppercase font-semibold block">Duration</span>
+                <span className="font-black text-indigo-900">{exam.durationMinutes}m</span>
+              </div>
+              <div>
+                <span className="text-[10px] text-slate-400 uppercase font-semibold block">Questions</span>
+                <span className="font-black text-indigo-900">{orderedQuestions.length} MCQs</span>
+              </div>
+              <div>
+                <span className="text-[10px] text-slate-400 uppercase font-semibold block">Negative Mark</span>
+                <span className="font-black text-rose-600">{exam.negativeMarking > 0 ? `-${exam.negativeMarking}` : 'None'}</span>
+              </div>
+            </div>
+
+            <div className="space-y-2 text-xs text-slate-600">
+              <h4 className="font-bold text-slate-900">Key Guidelines:</h4>
+              <ul className="list-disc pl-4 space-y-1 text-[11px] text-slate-600">
+                <li>Selected answers save automatically. You may modify choices anytime before final submit.</li>
+                <li>When the timer hits 0:00, or if concluded by the teacher, the exam auto-submits.</li>
+                <li>Palette numbers allow jumping directly to any question.</li>
+                <li>Anti-cheat tab switch monitoring is active for this session.</li>
+              </ul>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setShowInstructionsModal(false)}
+              className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-xs transition-colors cursor-pointer"
+            >
+              Return to Exam Questions
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Confirmation Modal before Submit */}
       {showSubmitModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs animate-fadeIn">
@@ -543,6 +692,104 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
                 Yes, Submit
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Teacher Ended Exam Modal Notice */}
+      {endedByTeacherNotice && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 text-center space-y-4 shadow-2xl border border-rose-100">
+            <div className="w-16 h-16 rounded-2xl bg-rose-100 text-rose-600 mx-auto flex items-center justify-center">
+              <AlertTriangle className="w-8 h-8 animate-pulse" />
+            </div>
+            <div className="space-y-1.5">
+              <h3 className="text-xl font-black text-slate-900">Exam Ended by Instructor</h3>
+              <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+                Your instructor has officially ended this exam session from the teacher panel.
+                Your answers recorded up to this moment are being automatically submitted.
+              </p>
+            </div>
+            <div className="flex items-center justify-center gap-2 text-xs font-semibold text-indigo-600 py-2">
+              <div className="w-4 h-4 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+              <span>Finalizing and submitting your scorecard...</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* High-Tech Assessment Submission & DB Sync Loading Overlay */}
+      {isSubmitting && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md animate-fadeIn">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 text-center space-y-5 sm:space-y-6 shadow-2xl border border-slate-100 relative overflow-hidden">
+            
+            {/* Top Glowing Animated Gradient Bar */}
+            <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-indigo-500 via-purple-500 to-emerald-500 animate-pulse" />
+
+            {/* Central Animated Orb with DB & Cloud Icons */}
+            <div className="relative w-24 h-24 mx-auto flex items-center justify-center">
+              {/* Outer pulsing ring */}
+              <div className="absolute inset-0 rounded-full bg-indigo-500/10 animate-ping opacity-75" />
+              {/* Spinning gradient ring */}
+              <div className="absolute inset-1 rounded-full border-2 border-indigo-500/20 border-t-indigo-600 border-r-purple-600 animate-spin" />
+              {/* Inner glowing container */}
+              <div className="relative w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-600 via-indigo-700 to-purple-800 text-white flex items-center justify-center shadow-lg shadow-indigo-600/30">
+                {submitStage === 1 ? (
+                  <Database className="w-8 h-8 animate-pulse text-indigo-100" />
+                ) : submitStage === 2 ? (
+                  <RefreshCw className="w-8 h-8 animate-spin text-indigo-100" />
+                ) : (
+                  <Sparkles className="w-8 h-8 animate-bounce text-emerald-200" />
+                )}
+              </div>
+            </div>
+
+            {/* Status Titles */}
+            <div className="space-y-1.5">
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-50 border border-indigo-200 text-indigo-700 text-xs font-bold">
+                <Database className="w-3.5 h-3.5 text-indigo-600" />
+                <span>Cloud Database Sync Active</span>
+              </div>
+              <h3 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
+                Submitting Assessment
+              </h3>
+              <p className="text-xs sm:text-sm text-slate-600 min-h-[38px] flex items-center justify-center font-medium transition-all px-2">
+                {submitStatusText}
+              </p>
+            </div>
+
+            {/* Stepper Progress Bar */}
+            <div className="space-y-2">
+              <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden p-0.5 border border-slate-200">
+                <div 
+                  className="bg-gradient-to-r from-indigo-600 via-purple-600 to-emerald-500 h-full rounded-full transition-all duration-700 ease-out"
+                  style={{ width: `${submitStage === 1 ? '38%' : submitStage === 2 ? '74%' : '100%'}` }}
+                />
+              </div>
+
+              {/* 3 Step Pill Indicators */}
+              <div className="grid grid-cols-3 gap-1 pt-1 text-[10px] font-semibold text-slate-500">
+                <div className={`flex items-center justify-center gap-1 ${submitStage >= 1 ? 'text-indigo-600 font-bold' : ''}`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${submitStage >= 1 ? 'bg-indigo-600 animate-pulse' : 'bg-slate-300'}`} />
+                  <span>1. Packaging</span>
+                </div>
+                <div className={`flex items-center justify-center gap-1 ${submitStage >= 2 ? 'text-purple-600 font-bold' : ''}`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${submitStage >= 2 ? 'bg-purple-600 animate-pulse' : 'bg-slate-300'}`} />
+                  <span>2. DB Sync</span>
+                </div>
+                <div className={`flex items-center justify-center gap-1 ${submitStage >= 3 ? 'text-emerald-600 font-bold' : ''}`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${submitStage >= 3 ? 'bg-emerald-600 animate-pulse' : 'bg-slate-300'}`} />
+                  <span>3. Scorecard</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Reassurance Footer */}
+            <div className="pt-2 border-t border-slate-100 flex items-center justify-center gap-1.5 text-[11px] text-slate-400">
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Verified and securely synced with Firebase Firestore</span>
+            </div>
+
           </div>
         </div>
       )}

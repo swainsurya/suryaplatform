@@ -1,8 +1,17 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 @layer base {
   * {
     box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
+  }
+  html {
+    color-scheme: light dark;
+  }
+  html.dark {
+    color-scheme: dark;
   }
   body {
     margin: 0;
@@ -10,10 +19,15 @@
     background-color: #f8fafc;
     color: #0f172a;
     -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  html.dark body {
+    background-color: #090d16;
+    color: #f1f5f9;
   }
 }
 
-/* Custom scrollbars */
+/* Custom scrollbars with dark mode support */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -23,13 +37,32 @@
   background: #f1f5f9;
 }
 
+html.dark ::-webkit-scrollbar-track {
+  background: #0f172a;
+}
+
 ::-webkit-scrollbar-thumb {
   background: #cbd5e1;
   border-radius: 9999px;
 }
 
+html.dark ::-webkit-scrollbar-thumb {
+  background: #334155;
+}
+
 ::-webkit-scrollbar-thumb:hover {
   background: #94a3b8;
+}
+
+html.dark ::-webkit-scrollbar-thumb:hover {
+  background: #475569;
+}
+
+/* Mobile responsive touch helpers */
+@media (max-width: 640px) {
+  button, input, select {
+    font-size: 16px; /* Prevents iOS auto-zoom on form inputs */
+  }
 }
 
 /* Print optimizations for clean scorecard and test download */

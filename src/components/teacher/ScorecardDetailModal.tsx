@@ -8,7 +8,8 @@ import {
   Calendar, 
   User, 
   Hash, 
-  FileCheck2
+  FileCheck2,
+  AlertTriangle
 } from 'lucide-react';
 import { ExamSubmission, Exam } from '../../types/exam';
 
@@ -69,6 +70,14 @@ export const ScorecardDetailModal: React.FC<ScorecardDetailModalProps> = ({
 
         {/* Printable / Viewable Body */}
         <div className="p-4 sm:p-6 overflow-y-auto space-y-4 sm:space-y-6">
+          
+          {/* Instructor Ended Session Notice */}
+          {submission.isEndedByTeacher && (
+            <div className="p-2.5 sm:p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 flex items-center gap-2.5 text-xs">
+              <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+              <span>This exam session was concluded early by the instructor. The candidate's answers were auto-submitted.</span>
+            </div>
+          )}
           
           {/* Student & Exam Info Card */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 sm:gap-4 p-3 sm:p-4 rounded-xl bg-slate-50 border border-slate-200 text-xs">

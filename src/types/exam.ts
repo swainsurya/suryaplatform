@@ -27,6 +27,8 @@ export interface Exam {
   shuffleQuestions: boolean;
   createdAt: string;
   isActive: boolean;
+  isEnded?: boolean;
+  endedAt?: string;
   questions: Question[];
 }
 
@@ -57,6 +59,7 @@ export interface ExamSubmission {
   maxScore: number;
   percentage: number;
   isPassed: boolean;
+  isEndedByTeacher?: boolean;
   answers: QuestionAnswer[];
 }
 

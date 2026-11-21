@@ -7,11 +7,13 @@ import {
   Trash2, 
   CheckCircle2, 
   XCircle, 
-  Clock, 
-  Calendar,
   Award,
   TrendingUp,
-  FileSpreadsheet
+  FileSpreadsheet,
+  StopCircle,
+  PlayCircle,
+  PowerOff,
+  RefreshCw
 } from 'lucide-react';
 import { Exam, ExamSubmission } from '../../types/exam';
 import { ScorecardDetailModal } from './ScorecardDetailModal';
@@ -28,10 +30,30 @@ export const ParticipantScorecards: React.FC<ParticipantScorecardsProps> = ({
   submissions,
   onSubmissionsUpdated,
 }) => {
-  const { deleteSubmission } = useExamStore();
+  const { deleteSubmission, endExam, reopenExam } = useExamStore();
   const [selectedExamId, setSelectedExamId] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [activeModalSubmission, setActiveModalSubmission] = useState<ExamSubmission | null>(null);
+  const [confirmEndExam, setConfirmEndExam] = useState<Exam | null>(null);
+  const [isEnding, setIsEnding] = useState<boolean>(false);
+
+  const selectedExam = selectedExamId !== 'all' ? exams.find(e => e.id === selectedExamId) : null;
+
+  const handleEndExam = async (examId: string) => {
+    setIsEnding(true);
+    try {
+      await endExam(examId);
+      setConfirmEndExam(null);
+      onSubmissionsUpdated();
+    } finally {
+      setIsEnding(false);
+    }
+  };
+
+  const handleReopenExam = async (examId: string) => {
+    await reopenExam(examId);
+    onSubmissionsUpdated();
+  };
 
   // Filter submissions
   const filteredSubmissions = submissions.filter((sub) => {
@@ -181,6 +203,62 @@ export const ParticipantScorecards: React.FC<ParticipantScorecardsProps> = ({
           <span>Export CSV</span>
         </button>
       </div>
+
+      {/* Selected Exam Control Banner */}
+      {selectedExam && (
+        <div className="bg-white rounded-2xl border border-slate-200 p-3 sm:p-4 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-fadeIn">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 ${
+              selectedExam.isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'
+            }`}>
+              {selectedExam.isActive ? <PlayCircle className="w-5 h-5 animate-pulse" /> : <PowerOff className="w-5 h-5 text-slate-500" />}
+            </div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-mono text-xs font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">
+                  {selectedExam.code}
+                </span>
+                <h4 className="font-bold text-slate-900 text-xs sm:text-sm truncate">{selectedExam.title}</h4>
+              </div>
+              <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500 mt-1">
+                <span className={`inline-flex items-center gap-1 font-bold ${
+                  selectedExam.isActive ? 'text-emerald-600' : 'text-slate-600'
+                }`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${selectedExam.isActive ? 'bg-emerald-500 animate-ping' : 'bg-slate-400'}`} />
+                  {selectedExam.isActive ? 'Exam Live & In Session' : 'Exam Concluded / Ended'}
+                </span>
+                {selectedExam.endedAt && (
+                  <span>• Ended at {new Date(selectedExam.endedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+            {selectedExam.isActive ? (
+              <button
+                type="button"
+                onClick={() => setConfirmEndExam(selectedExam)}
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-xs transition-colors cursor-pointer"
+                title="Immediately end this exam for all candidates"
+              >
+                <StopCircle className="w-3.5 h-3.5" />
+                <span>End Exam for All</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => handleReopenExam(selectedExam.id)}
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 font-bold text-xs transition-colors cursor-pointer"
+                title="Reopen this exam for students"
+              >
+                <PlayCircle className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Reopen Exam</span>
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Submissions Section */}
       <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-xs">
@@ -378,6 +456,64 @@ export const ParticipantScorecards: React.FC<ParticipantScorecardsProps> = ({
           </>
         )}
       </div>
+
+      {/* End Exam Confirmation Modal */}
+      {confirmEndExam && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs animate-fadeIn overflow-y-auto">
+          <div className="bg-white rounded-2xl sm:rounded-3xl max-w-md w-full p-5 sm:p-6 shadow-2xl border border-slate-200 space-y-4 my-auto">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
+                <StopCircle className="w-5 h-5 stroke-[2.5]" />
+              </div>
+              <div className="min-w-0">
+                <h3 className="font-bold text-base text-slate-900 truncate">End Exam Session?</h3>
+                <p className="text-xs text-slate-500 font-mono truncate">{confirmEndExam.code} • {confirmEndExam.title}</p>
+              </div>
+            </div>
+
+            <div className="p-3.5 rounded-2xl bg-rose-50/70 border border-rose-100 text-xs text-rose-950 space-y-2">
+              <p className="font-bold text-rose-900">
+                Are you sure you want to end this exam immediately?
+              </p>
+              <ul className="space-y-1 text-[11px] text-rose-800 list-disc list-inside">
+                <li>All active candidates will have their exam closed and auto-submitted.</li>
+                <li>New students will not be able to enter this exam.</li>
+                <li>Scorecard records will update instantly.</li>
+                <li>You can reopen this exam whenever you wish.</li>
+              </ul>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => setConfirmEndExam(null)}
+                disabled={isEnding}
+                className="px-4 py-2 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 font-semibold text-xs transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => handleEndExam(confirmEndExam.id)}
+                disabled={isEnding}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-md shadow-rose-600/20 transition-all cursor-pointer"
+              >
+                {isEnding ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Ending Exam...</span>
+                  </>
+                ) : (
+                  <>
+                    <StopCircle className="w-3.5 h-3.5" />
+                    <span>Yes, End Exam Now</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal for detailed scorecard inspection */}
       {activeModalSubmission && (

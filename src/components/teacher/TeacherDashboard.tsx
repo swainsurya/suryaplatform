@@ -16,7 +16,10 @@ import {
   Database,
   AlertTriangle,
   CheckCircle2,
-  RefreshCw
+  RefreshCw,
+  StopCircle,
+  PlayCircle,
+  PowerOff
 } from 'lucide-react';
 import { Exam, ExamSubmission } from '../../types/exam';
 import { ExamEditor } from './ExamEditor';
@@ -37,13 +40,33 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
   onRefreshData,
   onStudentPortalPreview
 }) => {
-  const { saveExam, deleteExam } = useExamStore();
+  const { saveExam, deleteExam, endExam, reopenExam } = useExamStore();
 
   const [activeTab, setActiveTab] = useState<'exams' | 'submissions' | 'editor'>('exams');
   const [editingExam, setEditingExam] = useState<Exam | null>(null);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
   const [shareModalExam, setShareModalExam] = useState<Exam | null>(null);
+  const [confirmEndExam, setConfirmEndExam] = useState<Exam | null>(null);
+  const [isEndingExam, setIsEndingExam] = useState<boolean>(false);
   const [dbTestStatus, setDbTestStatus] = useState<{ testing: boolean; message: string; connected?: boolean; details?: string } | null>(null);
+
+  const activeExamsCount = exams.filter(e => e.isActive && !e.isEnded).length;
+
+  const handleEndExam = async (examId: string) => {
+    setIsEndingExam(true);
+    try {
+      await endExam(examId);
+      setConfirmEndExam(null);
+      onRefreshData();
+    } finally {
+      setIsEndingExam(false);
+    }
+  };
+
+  const handleReopenExam = async (examId: string) => {
+    await reopenExam(examId);
+    onRefreshData();
+  };
 
   const handleTestDatabase = async () => {
     setDbTestStatus({ testing: true, message: 'Testing connection to Firebase Firestore...' });
@@ -108,7 +131,16 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
             <Sparkles className="w-3.5 h-3.5" />
             <span>Teacher Administration</span>
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 ml-1.5 animate-pulse" />
-            <span className="text-[10px] text-emerald-300 font-mono">Firebase DB: suryaplatform-b87ab</span>
+            <span className="text-[10px] text-emerald-300 font-mono">Firebase DB</span>
+            <span className="mx-1 text-white/30">•</span>
+            {activeExamsCount > 0 ? (
+              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-300">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+                <span>{activeExamsCount} Active {activeExamsCount === 1 ? 'Exam' : 'Exams'}</span>
+              </span>
+            ) : (
+              <span className="text-[11px] text-slate-400 font-normal">All exams closed</span>
+            )}
           </div>
 
           <h1 className="text-xl sm:text-3xl font-black tracking-tight">
@@ -279,8 +311,8 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                           }`}
                           title="Click to toggle active state"
                         >
-                          <span className={`w-1.5 h-1.5 rounded-full ${exam.isActive ? 'bg-emerald-500' : 'bg-slate-400'}`} />
-                          <span>{exam.isActive ? 'Active' : 'Closed'}</span>
+                          <span className={`w-1.5 h-1.5 rounded-full ${exam.isActive ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`} />
+                          <span>{exam.isActive ? 'Live / Active' : (exam.isEnded ? 'Exam Ended' : 'Closed')}</span>
                         </button>
                       </div>
 
@@ -324,11 +356,49 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                           )}
                         </div>
                       </div>
+
+                      {/* Ended status banner if exam was concluded */}
+                      {exam.isEnded && (
+                        <div className="p-2 sm:p-2.5 rounded-xl bg-amber-50/80 border border-amber-200/70 text-xs flex items-center justify-between">
+                          <span className="text-amber-800 flex items-center gap-1.5 text-[11px] font-semibold">
+                            <PowerOff className="w-3.5 h-3.5 text-amber-600" />
+                            <span>Ended by Teacher</span>
+                          </span>
+                          {exam.endedAt && (
+                            <span className="text-[10px] text-amber-700 font-mono">
+                              {new Date(exam.endedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                          )}
+                        </div>
+                      )}
                     </div>
 
                     {/* Card Actions */}
-                    <div className="p-2.5 sm:p-3 bg-slate-50/80 border-t border-slate-100 flex items-center justify-between gap-1">
-                      <div className="flex items-center gap-1">
+                    <div className="p-2.5 sm:p-3 bg-slate-50/80 border-t border-slate-100 flex flex-wrap items-center justify-between gap-1.5">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        {/* Direct End Exam button from teacher panel */}
+                        {exam.isActive ? (
+                          <button
+                            type="button"
+                            onClick={() => setConfirmEndExam(exam)}
+                            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-xs transition-colors cursor-pointer"
+                            title="End this exam for all students now"
+                          >
+                            <StopCircle className="w-3.5 h-3.5" />
+                            <span>End Exam</span>
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handleReopenExam(exam.id)}
+                            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 text-xs font-bold transition-colors cursor-pointer"
+                            title="Reopen exam for candidates"
+                          >
+                            <PlayCircle className="w-3.5 h-3.5 text-emerald-600" />
+                            <span>Reopen</span>
+                          </button>
+                        )}
+
                         <button
                           type="button"
                           onClick={() => setShareModalExam(exam)}
@@ -350,11 +420,11 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                         </button>
                       </div>
 
-                      <div className="flex items-center gap-1">
+                      <div className="flex items-center gap-1 ml-auto">
                         <button
                           type="button"
                           onClick={() => handleEdit(exam)}
-                          className="p-1.5 rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-white transition-colors"
+                          className="p-1.5 rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-white transition-colors cursor-pointer"
                           title="Edit Exam & Questions"
                         >
                           <Edit3 className="w-4 h-4" />
@@ -363,7 +433,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                         <button
                           type="button"
                           onClick={() => handleDelete(exam.id, exam.title)}
-                          className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
                           title="Delete Exam"
                         >
                           <Trash2 className="w-4 h-4" />
@@ -378,7 +448,63 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
         </div>
       )}
 
-      {/* Share Modal Dialog */}
+      {/* End Exam Confirmation Modal */}
+      {confirmEndExam && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs animate-fadeIn overflow-y-auto">
+          <div className="bg-white rounded-2xl sm:rounded-3xl max-w-md w-full p-5 sm:p-6 shadow-2xl border border-slate-200 space-y-4 my-auto">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
+                <StopCircle className="w-5 h-5 stroke-[2.5]" />
+              </div>
+              <div className="min-w-0">
+                <h3 className="font-bold text-base text-slate-900 truncate">End Exam Session?</h3>
+                <p className="text-xs text-slate-500 font-mono truncate">{confirmEndExam.code} • {confirmEndExam.title}</p>
+              </div>
+            </div>
+
+            <div className="p-3.5 rounded-2xl bg-rose-50/70 border border-rose-100 text-xs text-rose-950 space-y-2">
+              <p className="font-bold text-rose-900">
+                Are you sure you want to end this exam immediately?
+              </p>
+              <ul className="space-y-1 text-[11px] text-rose-800 list-disc list-inside">
+                <li>Active students attempting this exam will have their answers auto-submitted immediately.</li>
+                <li>New students will be blocked from starting this exam.</li>
+                <li>Final participant scorecards will be instantly updated.</li>
+                <li>You can reopen the exam at any time using the "Reopen" button.</li>
+              </ul>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => setConfirmEndExam(null)}
+                disabled={isEndingExam}
+                className="px-4 py-2 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 font-semibold text-xs transition-colors cursor-pointer"
+              >
+                Keep Exam Running
+              </button>
+              <button
+                type="button"
+                onClick={() => handleEndExam(confirmEndExam.id)}
+                disabled={isEndingExam}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-md shadow-rose-600/20 transition-all cursor-pointer"
+              >
+                {isEndingExam ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Ending Exam...</span>
+                  </>
+                ) : (
+                  <>
+                    <StopCircle className="w-3.5 h-3.5" />
+                    <span>Yes, End Exam Now</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {shareModalExam && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/50 backdrop-blur-xs animate-fadeIn overflow-y-auto">
           <div className="bg-white rounded-2xl sm:rounded-3xl max-w-md w-full p-5 sm:p-6 shadow-2xl border border-slate-200 space-y-4 sm:space-y-5 my-auto max-h-[92vh] overflow-y-auto">

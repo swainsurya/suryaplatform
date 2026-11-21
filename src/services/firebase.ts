@@ -115,6 +115,8 @@ export function sanitizeExamForFirestore(exam: Exam): Record<string, any> {
     shuffleQuestions: Boolean(exam.shuffleQuestions),
     createdAt: exam.createdAt || new Date().toISOString(),
     isActive: exam.isActive ?? true,
+    isEnded: Boolean(exam.isEnded),
+    endedAt: exam.endedAt ? String(exam.endedAt) : null,
     questions: (exam.questions || []).map((q, idx) => ({
       id: q.id || `q-${idx}-${Date.now()}`,
       questionText: String(q.questionText || ''),
@@ -150,6 +152,7 @@ export function sanitizeSubmissionForFirestore(sub: ExamSubmission): Record<stri
     maxScore: Number(sub.maxScore) || 0,
     percentage: Number(sub.percentage) || 0,
     isPassed: Boolean(sub.isPassed),
+    isEndedByTeacher: Boolean(sub.isEndedByTeacher),
     answers: (sub.answers || []).map(a => ({
       questionId: String(a.questionId),
       selectedOptionIndex: a.selectedOptionIndex !== null && a.selectedOptionIndex !== undefined ? Number(a.selectedOptionIndex) : null,

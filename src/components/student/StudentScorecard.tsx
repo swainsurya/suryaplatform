@@ -9,7 +9,8 @@ import {
   Printer, 
   ArrowLeft, 
   RotateCcw,
-  Award
+  Award,
+  AlertTriangle
 } from 'lucide-react';
 import { ExamSubmission, Exam } from '../../types/exam';
 
@@ -80,14 +81,40 @@ export const StudentScorecard: React.FC<StudentScorecardProps> = ({
           </button>
           <button
             type="button"
-            onClick={onRetake}
-            className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold shadow-xs transition-colors cursor-pointer"
+            onClick={() => {
+              if (!exam.isActive) {
+                alert('This exam has been concluded by the instructor and cannot be retaken.');
+                return;
+              }
+              onRetake();
+            }}
+            disabled={!exam.isActive}
+            className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold shadow-xs transition-colors cursor-pointer ${
+              !exam.isActive
+                ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                : 'bg-indigo-600 hover:bg-indigo-700 text-white'
+            }`}
+            title={!exam.isActive ? 'This exam has been concluded by the instructor' : 'Retake Exam'}
           >
             <RotateCcw className="w-4 h-4" />
             <span>Retake Exam</span>
           </button>
         </div>
       </div>
+
+      {/* Notice if exam was concluded early by teacher */}
+      {submission.isEndedByTeacher && (
+        <div className="p-3.5 sm:p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 flex items-start gap-3 shadow-xs">
+          <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+          <div className="space-y-0.5 text-xs sm:text-sm">
+            <p className="font-bold text-amber-950">Exam Concluded Early by Instructor</p>
+            <p className="text-amber-800 text-[11px] sm:text-xs leading-relaxed">
+              The teacher ended this examination from the administration panel.
+              All your recorded answers were submitted and evaluated immediately.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Main Score Hero Card */}
       <div className="bg-white rounded-2xl sm:rounded-3xl border border-slate-200 p-5 sm:p-8 shadow-lg text-center relative overflow-hidden">

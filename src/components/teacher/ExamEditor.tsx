@@ -114,6 +114,8 @@ export const ExamEditor: React.FC<ExamEditorProps> = ({
       shuffleQuestions,
       createdAt: initialExam?.createdAt || new Date().toISOString(),
       isActive,
+      isEnded: isActive ? false : (initialExam?.isEnded ?? false),
+      endedAt: isActive ? undefined : initialExam?.endedAt,
       questions,
     };
 

@@ -41,19 +41,24 @@ interface ExamState {
   } | null;
   urlExamCode: string;
   isLoading: boolean;
+  theme: 'light' | 'dark';
 
   // Actions
   initStore: () => Promise<void>;
+  toggleTheme: () => void;
+  setTheme: (theme: 'light' | 'dark') => void;
   setCurrentView: (view: 'student' | 'teacher') => void;
   setUrlExamCode: (code: string) => void;
   loginTeacher: () => void;
   logoutTeacher: () => void;
   startExam: (exam: Exam, studentDetails: { name: string; rollNumber?: string; email?: string }) => void;
   updateExamProgress: (updates: { userAnswers?: Record<string, number | null>; markedForReview?: string[]; currentIndex?: number }) => void;
-  finishExam: (userAnswers: Record<string, number | null>, timeSpentSeconds: number) => Promise<void>;
+  finishExam: (userAnswers: Record<string, number | null>, timeSpentSeconds: number, isEndedByTeacher?: boolean) => Promise<void>;
   retakeExam: () => void;
   exitToHome: () => void;
   saveExam: (exam: Exam) => Promise<void>;
+  endExam: (examId: string) => Promise<void>;
+  reopenExam: (examId: string) => Promise<void>;
   deleteExam: (id: string) => Promise<void>;
   deleteSubmission: (id: string) => Promise<void>;
   resetDemoData: () => Promise<void>;
@@ -69,9 +74,23 @@ export const useExamStore = create<ExamState>((set, get) => ({
   activeScorecard: null,
   urlExamCode: '',
   isLoading: true,
+  theme: 'light',
 
   initStore: async () => {
     initStorage();
+
+    // Theme initialization
+    const savedTheme = (localStorage.getItem('surya_theme') as 'light' | 'dark') || 
+      (typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    if (typeof document !== 'undefined') {
+      if (savedTheme === 'dark') {
+        document.documentElement.classList.add('dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+      }
+    }
+    set({ theme: savedTheme });
+
     const isAuth = isTeacherAuthenticated();
     const localExams = getExams();
     const localSubs = getSubmissions();
@@ -97,6 +116,19 @@ export const useExamStore = create<ExamState>((set, get) => ({
       currentView: restoredSession ? 'student' : (isAuth ? 'teacher' : 'student'),
       isLoading: false
     });
+
+    // Synchronize across browser tabs on the same origin (local testing & offline sync)
+    if (typeof window !== 'undefined') {
+      window.addEventListener('storage', (e) => {
+        if (e.key === 'surya_exams_data') {
+          const updatedExams = getExams();
+          set({ exams: updatedExams });
+        } else if (e.key === 'surya_submissions_data') {
+          const updatedSubs = getSubmissions();
+          set({ submissions: updatedSubs });
+        }
+      });
+    }
 
     // Automatically initialize Firebase Firestore
     const db = getFirebaseDb();
@@ -163,6 +195,36 @@ export const useExamStore = create<ExamState>((set, get) => ({
       return remoteMatch;
     }
     return null;
+  },
+
+  toggleTheme: () => {
+    const currentTheme = get().theme;
+    const nextTheme = currentTheme === 'dark' ? 'light' : 'dark';
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('surya_theme', nextTheme);
+    }
+    if (typeof document !== 'undefined') {
+      if (nextTheme === 'dark') {
+        document.documentElement.classList.add('dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+      }
+    }
+    set({ theme: nextTheme });
+  },
+
+  setTheme: (theme) => {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem('surya_theme', theme);
+    }
+    if (typeof document !== 'undefined') {
+      if (theme === 'dark') {
+        document.documentElement.classList.add('dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+      }
+    }
+    set({ theme });
   },
 
   setCurrentView: (view) => set({ currentView: view, activeScorecard: null }),
@@ -232,7 +294,7 @@ export const useExamStore = create<ExamState>((set, get) => ({
     set({ activeTestSession: updated });
   },
 
-  finishExam: async (userAnswers, timeSpentSeconds) => {
+  finishExam: async (userAnswers, timeSpentSeconds, isEndedByTeacher = false) => {
     const { activeTestSession } = get();
     if (!activeTestSession) return;
     const completedExam = activeTestSession.exam;
@@ -297,6 +359,7 @@ export const useExamStore = create<ExamState>((set, get) => ({
       maxScore,
       percentage: Number(finalPercentage.toFixed(2)),
       isPassed,
+      isEndedByTeacher: Boolean(isEndedByTeacher),
       answers: answersList,
     };
 
@@ -353,6 +416,46 @@ export const useExamStore = create<ExamState>((set, get) => ({
       }
       return { exams: [exam, ...state.exams] };
     });
+  },
+
+  endExam: async (examId: string) => {
+    const currentList = get().exams;
+    const target = currentList.find(e => e.id === examId);
+    if (!target) return;
+
+    const updated: Exam = {
+      ...target,
+      isActive: false,
+      isEnded: true,
+      endedAt: new Date().toISOString(),
+    };
+
+    saveExamToLocal(updated);
+    await saveExamToFirebase(updated);
+
+    set((state) => ({
+      exams: state.exams.map(e => e.id === examId ? updated : e)
+    }));
+  },
+
+  reopenExam: async (examId: string) => {
+    const currentList = get().exams;
+    const target = currentList.find(e => e.id === examId);
+    if (!target) return;
+
+    const updated: Exam = {
+      ...target,
+      isActive: true,
+      isEnded: false,
+      endedAt: undefined,
+    };
+
+    saveExamToLocal(updated);
+    await saveExamToFirebase(updated);
+
+    set((state) => ({
+      exams: state.exams.map(e => e.id === examId ? updated : e)
+    }));
   },
 
   deleteExam: async (id: string) => {
