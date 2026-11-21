@@ -54,7 +54,6 @@ interface ExamState {
   startExam: (exam: Exam, studentDetails: { name: string; rollNumber?: string; email?: string }) => void;
   updateExamProgress: (updates: { userAnswers?: Record<string, number | null>; markedForReview?: string[]; currentIndex?: number }) => void;
   finishExam: (userAnswers: Record<string, number | null>, timeSpentSeconds: number, isEndedByTeacher?: boolean) => Promise<void>;
-  retakeExam: () => void;
   exitToHome: () => void;
   saveExam: (exam: Exam) => Promise<void>;
   endExam: (examId: string) => Promise<void>;
@@ -377,18 +376,6 @@ export const useExamStore = create<ExamState>((set, get) => ({
         exam: completedExam,
       }
     }));
-  },
-
-  retakeExam: () => {
-    const { activeScorecard } = get();
-    if (!activeScorecard) return;
-
-    clearActiveExamSession();
-    get().startExam(activeScorecard.exam, {
-      name: activeScorecard.submission.studentName,
-      rollNumber: activeScorecard.submission.studentRollNumber,
-      email: activeScorecard.submission.studentEmail,
-    });
   },
 
   exitToHome: () => {

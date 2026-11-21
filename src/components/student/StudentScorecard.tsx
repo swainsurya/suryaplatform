@@ -8,7 +8,6 @@ import {
   MinusCircle, 
   Printer, 
   ArrowLeft, 
-  RotateCcw,
   Award,
   AlertTriangle
 } from 'lucide-react';
@@ -17,14 +16,12 @@ import { ExamSubmission, Exam } from '../../types/exam';
 interface StudentScorecardProps {
   submission: ExamSubmission;
   exam: Exam;
-  onRetake: () => void;
   onGoHome: () => void;
 }
 
 export const StudentScorecard: React.FC<StudentScorecardProps> = ({
   submission,
   exam,
-  onRetake,
   onGoHome,
 }) => {
   // Trigger celebration confetti on pass!
@@ -78,26 +75,6 @@ export const StudentScorecard: React.FC<StudentScorecardProps> = ({
           >
             <Printer className="w-4 h-4" />
             <span>Print / PDF</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              if (!exam.isActive) {
-                alert('This exam has been concluded by the instructor and cannot be retaken.');
-                return;
-              }
-              onRetake();
-            }}
-            disabled={!exam.isActive}
-            className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold shadow-xs transition-colors cursor-pointer ${
-              !exam.isActive
-                ? 'bg-slate-200 dark:bg-slate-800 text-slate-400 dark:text-slate-600 cursor-not-allowed'
-                : 'bg-indigo-600 hover:bg-indigo-700 text-white'
-            }`}
-            title={!exam.isActive ? 'This exam has been concluded by the instructor' : 'Retake Exam'}
-          >
-            <RotateCcw className="w-4 h-4" />
-            <span>Retake Exam</span>
           </button>
         </div>
       </div>

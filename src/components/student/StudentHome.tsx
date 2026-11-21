@@ -1,11 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  BookOpen, 
-  Clock, 
-  Award, 
   ArrowRight, 
   AlertCircle,
-  Layers,
   GraduationCap,
   ShieldCheck,
   User
@@ -130,28 +126,6 @@ export const StudentHome: React.FC<StudentHomeProps> = ({
     setInstructionExam(targetExam);
   };
 
-  const handleCardSelect = (exam: Exam) => {
-    if (!exam.isActive) {
-      if (exam.isEnded) {
-        alert(`Exam "${exam.title}" has been concluded by the instructor and is no longer accepting new attempts.`);
-      } else {
-        alert('This exam is currently not active.');
-      }
-      return;
-    }
-    setSelectedExam(exam);
-    setMatchedExam(exam);
-    setExamCodeInput(exam.code);
-
-    // Directly open the Welcome Instruction Screen
-    setCandidateDetails({
-      name: studentName.trim(),
-      rollNumber: studentRoll.trim() || undefined,
-      email: studentEmail.trim() || undefined,
-    });
-    setInstructionExam(exam);
-  };
-
   // If candidate clicked "Start Exam Now" or "Start Exam", show the full Welcome Instruction Screen
   if (instructionExam && candidateDetails) {
     return (
@@ -168,8 +142,6 @@ export const StudentHome: React.FC<StudentHomeProps> = ({
     );
   }
 
-  const activeExams = exams.filter(e => e.isActive);
-
   return (
     <div className="max-w-6xl mx-auto px-3 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-8 sm:space-y-10 animate-fadeIn">
       
@@ -183,7 +155,7 @@ export const StudentHome: React.FC<StudentHomeProps> = ({
           Attempt Online Assessments & Instant Scorecards
         </h1>
         <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400">
-          Enter the unique exam code provided by your instructor or pick an active exam below to start your timed test.
+          Enter the unique exam code provided by your instructor to start your timed test.
         </p>
       </div>
 
@@ -299,84 +271,6 @@ export const StudentHome: React.FC<StudentHomeProps> = ({
             </button>
           </form>
         </div>
-      </div>
-
-      {/* Available Active Exams List */}
-      <div className="space-y-4 sm:space-y-5 pt-2 sm:pt-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white">Available Active Exams</h2>
-            <p className="text-xs text-slate-500 dark:text-slate-400">Pick any ongoing assessment to attempt</p>
-          </div>
-          <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
-            {activeExams.length} Active
-          </span>
-        </div>
-
-        {activeExams.length === 0 ? (
-          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 p-8 text-center transition-colors">
-            <BookOpen className="w-10 h-10 text-slate-300 dark:text-slate-600 mx-auto mb-2" />
-            <p className="text-sm font-bold text-slate-700 dark:text-slate-300">No active exams currently available</p>
-            <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">Please ask your teacher to publish or activate an exam.</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 sm:gap-5">
-            {activeExams.map((exam) => (
-              <div
-                key={exam.id}
-                onClick={() => handleCardSelect(exam)}
-                className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 sm:p-5 shadow-xs hover:shadow-md hover:border-indigo-300 dark:hover:border-indigo-700 hover:shadow-indigo-500/5 transition-all cursor-pointer flex flex-col justify-between group"
-              >
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-mono font-bold px-2 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/70 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
-                      {exam.code}
-                    </span>
-                    <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50 px-2 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800">
-                      Active
-                    </span>
-                  </div>
-
-                  <h3 className="font-bold text-slate-900 dark:text-white text-sm group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
-                    {exam.title}
-                  </h3>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-2">
-                    {exam.description || 'No description provided.'}
-                  </p>
-                </div>
-
-                <div className="pt-3 sm:pt-4 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between text-xs mt-3 sm:mt-4">
-                  <div className="flex items-center gap-2 sm:gap-3 text-slate-500 dark:text-slate-400 text-[11px]">
-                    <span className="flex items-center gap-1">
-                      <Clock className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
-                      {exam.durationMinutes}m
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <Layers className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
-                      {exam.questions.length} Qs
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <Award className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400" />
-                      {exam.totalMarks} Pts
-                    </span>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleCardSelect(exam);
-                    }}
-                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 hover:bg-indigo-600 dark:hover:bg-indigo-600 text-indigo-700 dark:text-indigo-300 hover:text-white dark:hover:text-white font-bold text-xs transition-colors cursor-pointer shadow-xs"
-                  >
-                    <span>Start Exam</span>
-                    <ArrowRight className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
       </div>
 
     </div>

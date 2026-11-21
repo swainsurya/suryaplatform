@@ -23,7 +23,6 @@ export function App() {
     loginTeacher,
     startExam,
     finishExam,
-    retakeExam,
     exitToHome,
   } = useExamStore();
 
@@ -71,7 +70,6 @@ export function App() {
           <StudentScorecard
             submission={activeScorecard.submission}
             exam={activeScorecard.exam}
-            onRetake={retakeExam}
             onGoHome={exitToHome}
           />
         ) : currentView === 'teacher' ? (
