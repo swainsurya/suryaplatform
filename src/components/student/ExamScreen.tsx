@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { Exam, SanitizedQuestion } from '../../types/exam';
 import { QuestionPalette } from './QuestionPalette';
+import { useExamStore } from '../../store/useExamStore';
 
 interface ExamScreenProps {
   exam: Exam;
@@ -28,27 +29,18 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
   studentName,
   onFinishExam,
 }) => {
-  // Total duration in seconds decided by teacher
-  const totalDurationSeconds = Math.max(60, exam.durationMinutes * 60);
-  const [secondsRemaining, setSecondsRemaining] = useState<number>(totalDurationSeconds);
-  const [currentIndex, setCurrentIndex] = useState<number>(0);
-  const [userAnswers, setUserAnswers] = useState<Record<string, number | null>>({});
-  const [markedForReview, setMarkedForReview] = useState<Set<string>>(new Set());
-  const [showSubmitModal, setShowSubmitModal] = useState<boolean>(false);
-  const [showMobilePalette, setShowMobilePalette] = useState<boolean>(false);
-  const [tabSwitchCount, setTabSwitchCount] = useState<number>(0);
-  const [showTabWarning, setShowTabWarning] = useState<boolean>(false);
+  const { activeTestSession, updateExamProgress } = useExamStore();
 
-  const startTimeRef = useRef<number>(Date.now());
-  const submittedRef = useRef<boolean>(false);
-
-  // Active question list sanitized so answers cannot be inspected in memory
+  // Active question list restored from session so questions & order NEVER change on refresh
   const [orderedQuestions] = useState<SanitizedQuestion[]>(() => {
-    // Strip correctOptionIndex and explanation to prevent inspect-element cheating
-    const sanitized = exam.questions.map(q => ({
-      id: q.id,
+    if (activeTestSession?.orderedQuestions && activeTestSession.orderedQuestions.length > 0) {
+      return activeTestSession.orderedQuestions;
+    }
+
+    const sanitized = (exam.questions || []).map((q, idx) => ({
+      id: q.id || `q-${idx}`,
       questionText: q.questionText,
-      options: q.options,
+      options: q.options || [],
       marks: q.marks || 1
     }));
 
@@ -58,26 +50,89 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
     return sanitized;
   });
 
+  // Total duration in seconds decided by teacher
+  const totalDurationSeconds = Math.max(60, exam.durationMinutes * 60);
+
+  // Remaining time computed accurately from absolute timestamp across refreshes
+  const calculateInitialRemaining = (): number => {
+    if (activeTestSession?.examEndTime) {
+      const msLeft = activeTestSession.examEndTime - Date.now();
+      return Math.max(0, Math.round(msLeft / 1000));
+    }
+    return totalDurationSeconds;
+  };
+
+  const [secondsRemaining, setSecondsRemaining] = useState<number>(calculateInitialRemaining);
+
+  // Restore current question index, user answers, and review marks across refreshes
+  const [currentIndex, setCurrentIndex] = useState<number>(() => {
+    const savedIdx = activeTestSession?.currentIndex || 0;
+    return (savedIdx >= 0 && savedIdx < orderedQuestions.length) ? savedIdx : 0;
+  });
+
+  const [userAnswers, setUserAnswers] = useState<Record<string, number | null>>(() => {
+    return activeTestSession?.userAnswers || {};
+  });
+
+  const [markedForReview, setMarkedForReview] = useState<Set<string>>(() => {
+    return new Set(activeTestSession?.markedForReview || []);
+  });
+
+  const [showSubmitModal, setShowSubmitModal] = useState<boolean>(false);
+  const [showMobilePalette, setShowMobilePalette] = useState<boolean>(false);
+  const [tabSwitchCount, setTabSwitchCount] = useState<number>(0);
+  const [showTabWarning, setShowTabWarning] = useState<boolean>(false);
+
+  const startTimeRef = useRef<number>(activeTestSession?.examStartTime || Date.now());
+  const submittedRef = useRef<boolean>(false);
+
   const currentQuestion = orderedQuestions[currentIndex];
   const questionIds = orderedQuestions.map(q => q.id);
 
-  // Countdown Timer
+  // Warn student if they accidentally attempt to reload or close the tab
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (!submittedRef.current) {
+        e.preventDefault();
+        e.returnValue = 'You have an active exam in progress. Are you sure you want to refresh?';
+        return e.returnValue;
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, []);
+
+  // Countdown Timer tied to absolute examEndTime
   useEffect(() => {
     const timerInterval = setInterval(() => {
-      setSecondsRemaining((prev) => {
-        if (prev <= 1) {
+      if (activeTestSession?.examEndTime) {
+        const msLeft = activeTestSession.examEndTime - Date.now();
+        const secsLeft = Math.round(msLeft / 1000);
+        if (secsLeft <= 0) {
           clearInterval(timerInterval);
+          setSecondsRemaining(0);
           if (!submittedRef.current) {
-            handleFinalSubmit(); // Auto-submit when timer expires!
+            handleFinalSubmit(); // Auto-submit when countdown hits 0!
           }
-          return 0;
+          return;
         }
-        return prev - 1;
-      });
+        setSecondsRemaining(secsLeft);
+      } else {
+        setSecondsRemaining((prev) => {
+          if (prev <= 1) {
+            clearInterval(timerInterval);
+            if (!submittedRef.current) {
+              handleFinalSubmit();
+            }
+            return 0;
+          }
+          return prev - 1;
+        });
+      }
     }, 1000);
 
     return () => clearInterval(timerInterval);
-  }, []);
+  }, [activeTestSession?.examEndTime]);
 
   // Anti-cheat tab switch detection
   useEffect(() => {
@@ -108,32 +163,39 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
 
   const handleSelectOption = (optionIndex: number) => {
     if (!currentQuestion) return;
-    setUserAnswers(prev => ({
-      ...prev,
+    const updated = {
+      ...userAnswers,
       [currentQuestion.id]: optionIndex
-    }));
+    };
+    setUserAnswers(updated);
+    updateExamProgress({ userAnswers: updated });
   };
 
   const handleClearResponse = () => {
     if (!currentQuestion) return;
-    setUserAnswers(prev => {
-      const copy = { ...prev };
-      delete copy[currentQuestion.id];
-      return copy;
-    });
+    const updated = { ...userAnswers };
+    delete updated[currentQuestion.id];
+    setUserAnswers(updated);
+    updateExamProgress({ userAnswers: updated });
   };
 
   const handleToggleMarkForReview = () => {
     if (!currentQuestion) return;
-    setMarkedForReview(prev => {
-      const copy = new Set(prev);
-      if (copy.has(currentQuestion.id)) {
-        copy.delete(currentQuestion.id);
-      } else {
-        copy.add(currentQuestion.id);
-      }
-      return copy;
-    });
+    const copy = new Set(markedForReview);
+    if (copy.has(currentQuestion.id)) {
+      copy.delete(currentQuestion.id);
+    } else {
+      copy.add(currentQuestion.id);
+    }
+    setMarkedForReview(copy);
+    updateExamProgress({ markedForReview: Array.from(copy) });
+  };
+
+  const handleNavigateQuestion = (idx: number) => {
+    const validIdx = Math.max(0, Math.min(orderedQuestions.length - 1, idx));
+    setCurrentIndex(validIdx);
+    setShowMobilePalette(false);
+    updateExamProgress({ currentIndex: validIdx });
   };
 
   // Final submission evaluation securely passed to handler
@@ -141,7 +203,8 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
     if (submittedRef.current) return;
     submittedRef.current = true;
 
-    const timeSpentSeconds = Math.round((Date.now() - startTimeRef.current) / 1000);
+    const startTime = activeTestSession?.examStartTime || startTimeRef.current;
+    const timeSpentSeconds = Math.max(1, Math.round((Date.now() - startTime) / 1000));
     onFinishExam(userAnswers, Math.min(timeSpentSeconds, totalDurationSeconds));
   };
 
@@ -326,7 +389,7 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
                 <button
                   type="button"
                   disabled={currentIndex === 0}
-                  onClick={() => setCurrentIndex(prev => Math.max(0, prev - 1))}
+                  onClick={() => handleNavigateQuestion(currentIndex - 1)}
                   className="flex items-center gap-1 sm:gap-1.5 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl border border-slate-200 text-slate-700 font-semibold text-xs hover:bg-slate-100 disabled:opacity-40 disabled:pointer-events-none transition-colors cursor-pointer"
                 >
                   <ChevronLeft className="w-4 h-4" />
@@ -337,7 +400,7 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
                   {currentIndex < orderedQuestions.length - 1 ? (
                     <button
                       type="button"
-                      onClick={() => setCurrentIndex(prev => Math.min(orderedQuestions.length - 1, prev + 1))}
+                      onClick={() => handleNavigateQuestion(currentIndex + 1)}
                       className="flex items-center gap-1 sm:gap-1.5 px-4 sm:px-6 py-2 sm:py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-xs transition-colors cursor-pointer"
                     >
                       <span>Next</span>
@@ -368,7 +431,7 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
             userAnswers={userAnswers}
             markedForReview={markedForReview}
             questionIds={questionIds}
-            onSelectQuestion={(idx) => setCurrentIndex(idx)}
+            onSelectQuestion={handleNavigateQuestion}
           />
 
           {/* Guidelines Box */}
@@ -411,10 +474,7 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
               userAnswers={userAnswers}
               markedForReview={markedForReview}
               questionIds={questionIds}
-              onSelectQuestion={(idx) => {
-                setCurrentIndex(idx);
-                setShowMobilePalette(false);
-              }}
+              onSelectQuestion={handleNavigateQuestion}
             />
 
             <button

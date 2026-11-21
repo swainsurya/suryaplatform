@@ -338,3 +338,42 @@ export function resetToDemoData(): void {
   localStorage.removeItem(TEACHER_ATTEMPTS_KEY);
   localStorage.removeItem(TEACHER_LOCKOUT_KEY);
 }
+
+/**
+ * Persist active exam session to prevent loss on page refresh
+ */
+export function saveActiveExamSession(session: ActiveExamSession): void {
+  try {
+    localStorage.setItem(ACTIVE_EXAM_SESSION_KEY, JSON.stringify(session));
+  } catch (err) {
+    console.warn('Could not save active exam session:', err);
+  }
+}
+
+/**
+ * Retrieve active exam session if browser reloaded
+ */
+export function getActiveExamSession(): ActiveExamSession | null {
+  try {
+    const raw = localStorage.getItem(ACTIVE_EXAM_SESSION_KEY);
+    if (!raw) return null;
+    const session = JSON.parse(raw) as ActiveExamSession;
+    if (!session || !session.exam || !session.examStartTime || !session.examEndTime) {
+      return null;
+    }
+    return session;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Clear exam session when test submitted or cancelled
+ */
+export function clearActiveExamSession(): void {
+  try {
+    localStorage.removeItem(ACTIVE_EXAM_SESSION_KEY);
+  } catch (err) {
+    console.warn('Could not clear active exam session:', err);
+  }
+}

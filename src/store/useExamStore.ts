@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { Exam, ExamSubmission, QuestionAnswer } from '../types/exam';
+import { Exam, ExamSubmission, QuestionAnswer, ActiveExamSession } from '../types/exam';
 import { 
   getExams, 
   saveExam as saveExamToLocal, 
@@ -10,7 +10,10 @@ import {
   isTeacherAuthenticated, 
   setTeacherAuthenticated, 
   resetToDemoData, 
-  initStorage 
+  initStorage,
+  saveActiveExamSession,
+  getActiveExamSession,
+  clearActiveExamSession
 } from '../services/storage';
 import { 
   getFirebaseDb, 
@@ -31,12 +34,7 @@ interface ExamState {
   submissions: ExamSubmission[];
   currentView: 'student' | 'teacher';
   isTeacherAuth: boolean;
-  activeTestSession: {
-    exam: Exam;
-    studentName: string;
-    studentRollNumber?: string;
-    studentEmail?: string;
-  } | null;
+  activeTestSession: ActiveExamSession | null;
   activeScorecard: {
     submission: ExamSubmission;
     exam: Exam;
@@ -51,6 +49,7 @@ interface ExamState {
   loginTeacher: () => void;
   logoutTeacher: () => void;
   startExam: (exam: Exam, studentDetails: { name: string; rollNumber?: string; email?: string }) => void;
+  updateExamProgress: (updates: { userAnswers?: Record<string, number | null>; markedForReview?: string[]; currentIndex?: number }) => void;
   finishExam: (userAnswers: Record<string, number | null>, timeSpentSeconds: number) => Promise<void>;
   retakeExam: () => void;
   exitToHome: () => void;
@@ -77,10 +76,25 @@ export const useExamStore = create<ExamState>((set, get) => ({
     const localExams = getExams();
     const localSubs = getSubmissions();
 
+    // Check if an ongoing active exam session was preserved across browser refresh
+    const savedSession = getActiveExamSession();
+    let restoredSession: ActiveExamSession | null = null;
+    if (savedSession) {
+      const now = Date.now();
+      if (savedSession.examEndTime > now) {
+        restoredSession = savedSession;
+      } else {
+        // Exam time expired while away: clear expired session
+        clearActiveExamSession();
+      }
+    }
+
     set({
       exams: localExams,
       submissions: localSubs,
       isTeacherAuth: isAuth,
+      activeTestSession: restoredSession,
+      currentView: restoredSession ? 'student' : (isAuth ? 'teacher' : 'student'),
       isLoading: false
     });
 
@@ -166,21 +180,65 @@ export const useExamStore = create<ExamState>((set, get) => ({
   },
 
   startExam: (exam, details) => {
+    const durationMins = Math.max(1, Number(exam.durationMinutes) || 15);
+    const examStartTime = Date.now();
+    const examEndTime = examStartTime + durationMins * 60 * 1000;
+
+    // Generate ordered sanitized questions ONCE so they never re-shuffle or change on refresh
+    const sanitized = (exam.questions || []).map((q, idx) => ({
+      id: q.id || `q-${idx}`,
+      questionText: q.questionText,
+      options: q.options || [],
+      marks: q.marks || 1,
+    }));
+
+    const orderedQuestions = exam.shuffleQuestions
+      ? [...sanitized].sort(() => Math.random() - 0.5)
+      : sanitized;
+
+    const session: ActiveExamSession = {
+      exam,
+      studentName: details.name.trim(),
+      studentRollNumber: details.rollNumber?.trim(),
+      studentEmail: details.email?.trim(),
+      examStartTime,
+      examEndTime,
+      orderedQuestions,
+      userAnswers: {},
+      markedForReview: [],
+      currentIndex: 0,
+    };
+
+    saveActiveExamSession(session);
+
     set({
       activeScorecard: null,
-      activeTestSession: {
-        exam,
-        studentName: details.name,
-        studentRollNumber: details.rollNumber,
-        studentEmail: details.email,
-      }
+      activeTestSession: session,
+      currentView: 'student',
     });
+  },
+
+  updateExamProgress: (updates) => {
+    const current = get().activeTestSession;
+    if (!current) return;
+    const updated: ActiveExamSession = {
+      ...current,
+      ...updates,
+      userAnswers: updates.userAnswers !== undefined ? updates.userAnswers : current.userAnswers,
+      markedForReview: updates.markedForReview !== undefined ? updates.markedForReview : current.markedForReview,
+      currentIndex: updates.currentIndex !== undefined ? updates.currentIndex : current.currentIndex,
+    };
+    saveActiveExamSession(updated);
+    set({ activeTestSession: updated });
   },
 
   finishExam: async (userAnswers, timeSpentSeconds) => {
     const { activeTestSession } = get();
     if (!activeTestSession) return;
     const completedExam = activeTestSession.exam;
+
+    // Clear active session immediately so refresh now stays on scorecard
+    clearActiveExamSession();
 
     let totalScore = 0;
     let correctCount = 0;
@@ -262,18 +320,16 @@ export const useExamStore = create<ExamState>((set, get) => ({
     const { activeScorecard } = get();
     if (!activeScorecard) return;
 
-    set({
-      activeTestSession: {
-        exam: activeScorecard.exam,
-        studentName: activeScorecard.submission.studentName,
-        studentRollNumber: activeScorecard.submission.studentRollNumber,
-        studentEmail: activeScorecard.submission.studentEmail,
-      },
-      activeScorecard: null
+    clearActiveExamSession();
+    get().startExam(activeScorecard.exam, {
+      name: activeScorecard.submission.studentName,
+      rollNumber: activeScorecard.submission.studentRollNumber,
+      email: activeScorecard.submission.studentEmail,
     });
   },
 
   exitToHome: () => {
+    clearActiveExamSession();
     set({
       activeScorecard: null,
       activeTestSession: null,
