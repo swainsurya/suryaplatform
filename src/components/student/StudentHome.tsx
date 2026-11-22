@@ -202,7 +202,13 @@ export const StudentHome: React.FC<StudentHomeProps> = ({
                   <span>•</span>
                   <span>📝 {matchedExam.questions.length} MCQs</span>
                   <span>•</span>
-                  <span>🎯 Pass: {matchedExam.passingPercentage}%</span>
+                  <span className={`font-bold px-1.5 py-0.5 rounded text-[10px] ${
+                    matchedExam.enableAiProctoring === true 
+                      ? 'bg-rose-100 dark:bg-rose-950/70 text-rose-700 dark:text-rose-300' 
+                      : 'bg-emerald-100 dark:bg-emerald-950/70 text-emerald-700 dark:text-emerald-300'
+                  }`}>
+                    {matchedExam.enableAiProctoring === true ? '🔒 AI Proctored' : '📖 Standard Exam'}
+                  </span>
                 </div>
               </div>
             )}

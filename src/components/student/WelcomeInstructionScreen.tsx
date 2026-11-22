@@ -49,7 +49,7 @@ export const WelcomeInstructionScreen: React.FC<WelcomeInstructionScreenProps> =
   const [nameError, setNameError] = useState<string>('');
 
   // Camera Permission & System Check State
-  const isProctored = exam.enableAiProctoring !== false;
+  const isProctored = exam.enableAiProctoring === true;
   const [cameraStatus, setCameraStatus] = useState<'pending' | 'checking' | 'granted' | 'denied'>('pending');
   const [cameraError, setCameraError] = useState<string>('');
   const previewVideoRef = useRef<HTMLVideoElement | null>(null);
@@ -122,6 +122,15 @@ export const WelcomeInstructionScreen: React.FC<WelcomeInstructionScreenProps> =
     if (previewStreamRef.current) {
       previewStreamRef.current.getTracks().forEach((track) => track.stop());
       previewStreamRef.current = null;
+    }
+
+    // Trigger full screen mode immediately on direct user click interaction
+    try {
+      if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
+        await document.documentElement.requestFullscreen();
+      }
+    } catch (fsErr) {
+      console.warn('Fullscreen request bypassed by browser:', fsErr);
     }
 
     setNameError('');
@@ -554,10 +563,25 @@ export const WelcomeInstructionScreen: React.FC<WelcomeInstructionScreenProps> =
               </span>
             </li>
           )}
+          {isProctored ? (
+            <li className="flex items-start gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 dark:bg-indigo-400 mt-1.5 shrink-0" />
+              <span>
+                <strong>Anti-Cheat & Tab Monitoring:</strong> Window changes, tab switches, copy/pasting, and right-clicks are strictly blocked and logged as violations.
+              </span>
+            </li>
+          ) : (
+            <li className="flex items-start gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 dark:bg-emerald-400 mt-1.5 shrink-0" />
+              <span>
+                <strong>Standard Exam Mode:</strong> This assessment is conducted in standard mode. No webcam or AI vision monitoring is required.
+              </span>
+            </li>
+          )}
           <li className="flex items-start gap-2">
             <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 dark:bg-indigo-400 mt-1.5 shrink-0" />
             <span>
-              <strong>Anti-Cheat & Tab Monitoring:</strong> Window changes, tab switches, copy/pasting, and right-clicks are strictly blocked and logged as violations.
+              <strong>Fullscreen Assessment Mode:</strong> Starting the exam activates full screen mode for a focused, distraction-free environment. {isProctored ? 'Exiting fullscreen is tracked as a proctoring infraction.' : ''}
             </span>
           </li>
           <li className="flex items-start gap-2">

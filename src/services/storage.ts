@@ -23,6 +23,8 @@ const INITIAL_EXAMS: Exam[] = [
     passingPercentage: 50,
     negativeMarking: 0,
     shuffleQuestions: false,
+    enableAiProctoring: false,
+    maxViolationsAllowed: 3,
     createdAt: new Date(Date.now() - 86400000 * 2).toISOString(),
     isActive: true,
     questions: [

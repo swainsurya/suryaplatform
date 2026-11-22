@@ -103,6 +103,17 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
     onRefreshData();
   };
 
+  const handleToggleProctoring = async (exam: Exam) => {
+    const nextState = !exam.enableAiProctoring;
+    const updated: Exam = { 
+      ...exam, 
+      enableAiProctoring: nextState,
+      maxViolationsAllowed: exam.maxViolationsAllowed || 3
+    };
+    await saveExam(updated);
+    onRefreshData();
+  };
+
   const getExamLink = (code: string) => {
     const origin = window.location.origin;
     const path = window.location.pathname;
@@ -340,16 +351,20 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                           <Award className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-amber-500 dark:text-amber-400" />
                           <span>{exam.totalMarks} Pts</span>
                         </div>
-                        {exam.enableAiProctoring !== false ? (
-                          <div className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
-                            <ShieldCheck className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-indigo-600 dark:text-indigo-400" />
-                            <span>AI Proctored ({exam.maxViolationsAllowed ?? 3} strikes)</span>
-                          </div>
-                        ) : (
-                          <div className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
-                            <span>Standard Mode</span>
-                          </div>
-                        )}
+                        {/* Proctoring Mode Badge with Quick Toggle */}
+                        <button
+                          type="button"
+                          onClick={() => handleToggleProctoring(exam)}
+                          className={`flex items-center gap-1 px-2 py-0.5 rounded-md border text-[10px] sm:text-[11px] font-semibold transition-colors cursor-pointer ${
+                            exam.enableAiProctoring === true
+                              ? 'bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800 hover:bg-indigo-100 dark:hover:bg-indigo-900/50'
+                              : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700'
+                          }`}
+                          title={`Click to switch to ${exam.enableAiProctoring === true ? 'Standard Mode' : 'AI Proctored Mode'}`}
+                        >
+                          <ShieldCheck className={`w-3 h-3 sm:w-3.5 sm:h-3.5 ${exam.enableAiProctoring === true ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400'}`} />
+                          <span>{exam.enableAiProctoring === true ? `AI Proctored (${exam.maxViolationsAllowed ?? 3}s)` : 'Standard Mode'}</span>
+                        </button>
                       </div>
 
                       {/* Student Attempts Stats */}
@@ -543,13 +558,13 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
             <div className="space-y-3">
               <div className="flex items-center gap-1.5">
                 <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${
-                  shareModalExam.enableAiProctoring !== false
+                  shareModalExam.enableAiProctoring === true
                     ? 'bg-indigo-50 dark:bg-indigo-950/70 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800'
                     : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700'
                 }`}>
-                  {shareModalExam.enableAiProctoring !== false ? '🔒 AI Proctored Exam' : '📖 Standard Exam'}
+                  {shareModalExam.enableAiProctoring === true ? '🔒 AI Proctored Exam' : '📖 Standard Exam'}
                 </span>
-                {shareModalExam.enableAiProctoring !== false && (
+                {shareModalExam.enableAiProctoring === true && (
                   <span className="text-[10px] text-slate-500 dark:text-slate-400">
                     Auto-terminates after {shareModalExam.maxViolationsAllowed ?? 3} strikes
                   </span>

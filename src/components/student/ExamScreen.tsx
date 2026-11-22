@@ -132,7 +132,7 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
   const [submitStatusText, setSubmitStatusText] = useState<string>('Syncing responses with Cloud Database...');
 
   // AI Proctoring & Anti-Cheat State
-  const isProctored = exam.enableAiProctoring !== false;
+  const isProctored = exam.enableAiProctoring === true;
   const maxViolationsAllowed = exam.maxViolationsAllowed || 3;
   const [violations, setViolations] = useState<ProctoringViolation[]>([]);
   const violationsRef = useRef<ProctoringViolation[]>([]);
@@ -176,15 +176,6 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
       });
     }
   }, [currentIndex]);
-
-  // Fullscreen change listener
-  useEffect(() => {
-    const handleFsChange = () => {
-      setIsFullscreen(!!document.fullscreenElement);
-    };
-    document.addEventListener('fullscreenchange', handleFsChange);
-    return () => document.removeEventListener('fullscreenchange', handleFsChange);
-  }, []);
 
   // Final submission evaluation securely passed to handler with DB loading animation
   const handleFinalSubmit = useCallback(async (
@@ -237,6 +228,9 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
     } finally {
       clearTimeout(timer1);
       clearTimeout(timer2);
+      if (typeof document !== 'undefined' && document.fullscreenElement) {
+        document.exitFullscreen?.().catch(() => {});
+      }
     }
   }, [activeTestSession?.examStartTime, onFinishExam, totalDurationSeconds]);
 
@@ -297,6 +291,35 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
       playGazeWarningChime();
     }
   }, [isProctored]);
+
+  // Fullscreen change listener & auto-fullscreen attempt on mount
+  useEffect(() => {
+    // Attempt fullscreen on mount if not yet active
+    if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
+      document.documentElement.requestFullscreen().catch(() => {
+        // User interaction required by strict browser security; fullscreen recovery prompt handles it
+      });
+    }
+
+    const handleFsChange = () => {
+      const isNowFs = !!document.fullscreenElement;
+      setIsFullscreen(isNowFs);
+
+      if (!isNowFs && !submittedRef.current && !isTerminatedRef.current) {
+        if (isProctored) {
+          handleProctorViolation({
+            id: `viol-${Date.now()}`,
+            type: 'FULLSCREEN_EXIT',
+            message: 'Candidate exited full screen exam window.',
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+          });
+        }
+      }
+    };
+
+    document.addEventListener('fullscreenchange', handleFsChange);
+    return () => document.removeEventListener('fullscreenchange', handleFsChange);
+  }, [isProctored, handleProctorViolation]);
 
   const currentQuestion = orderedQuestions[currentIndex];
   const questionIds = orderedQuestions.map(q => q.id);
@@ -485,8 +508,9 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
     };
   }, [isProctored, activatePrivacyShield, handleProctorViolation, wipeClipboard]);
 
-  // Block any in-browser screen sharing or extension recording requests
+  // Block any in-browser screen sharing or extension recording requests (proctored mode only)
   useEffect(() => {
+    if (!isProctored) return;
     if (typeof navigator !== 'undefined' && navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia) {
       const origGetDisplayMedia = navigator.mediaDevices.getDisplayMedia;
       navigator.mediaDevices.getDisplayMedia = async () => {
@@ -502,7 +526,7 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
         navigator.mediaDevices.getDisplayMedia = origGetDisplayMedia;
       };
     }
-  }, [handleProctorViolation]);
+  }, [isProctored, handleProctorViolation]);
 
   // Prevent Copy, Cut, Paste, Drag, and Context Menu Right-Click
   useEffect(() => {
@@ -658,12 +682,27 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
     });
   };
 
+  // Fullscreen request handler
+  const handleRequestFullscreen = async () => {
+    try {
+      if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
+        await document.documentElement.requestFullscreen();
+        setIsFullscreen(true);
+      }
+    } catch (err) {
+      console.warn('Fullscreen request rejected by browser:', err);
+    }
+  };
+
   // Fullscreen toggle
   const handleToggleFullscreen = () => {
     if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen?.().catch(() => {});
-      setIsFullscreen(true);
+      handleRequestFullscreen();
     } else {
+      if (isProctored) {
+        const confirmExit = window.confirm('Warning: Fullscreen is required for this proctored exam. Exiting full screen will be logged as a security violation strike. Are you sure you want to exit fullscreen?');
+        if (!confirmExit) return;
+      }
       document.exitFullscreen?.().catch(() => {});
       setIsFullscreen(false);
     }
@@ -746,6 +785,13 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
           <div className="flex items-center gap-1.5 sm:gap-2.5 min-w-0 flex-1">
             <span className="text-[10px] sm:text-xs font-mono font-black px-1.5 sm:px-2 py-0.5 rounded-md sm:rounded-lg bg-indigo-50 dark:bg-indigo-950/70 text-indigo-700 dark:text-indigo-300 border border-indigo-200/80 dark:border-indigo-800 shrink-0">
               {exam.code}
+            </span>
+            <span className={`hidden sm:inline-flex items-center text-[10px] font-bold px-2 py-0.5 rounded-md border shrink-0 ${
+              isProctored
+                ? 'bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800'
+                : 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
+            }`}>
+              {isProctored ? '🔒 AI Proctored' : '📖 Standard Mode'}
             </span>
             <div className="min-w-0 flex-1">
               <h2 className="font-bold text-slate-900 dark:text-white text-xs sm:text-sm md:text-base leading-tight truncate">
@@ -1016,8 +1062,8 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
 
       </header>
 
-      {/* Real-time AI Proctor Warning Banner */}
-      {activeViolationAlert && !isTerminatedByProctor && (
+      {/* Real-time AI Proctor Warning Banner (Only in Proctored Mode) */}
+      {isProctored && activeViolationAlert && !isTerminatedByProctor && (
         <div className="bg-red-600 text-white px-3 sm:px-4 py-2 text-xs flex items-center justify-between shadow-md transition-all animate-fadeIn">
           <div className="flex items-center gap-2 max-w-5xl mx-auto">
             <ShieldAlert className="w-4 h-4 text-white shrink-0 animate-pulse" />
@@ -1035,8 +1081,8 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
         </div>
       )}
 
-      {/* Tab Switch Warning Banner */}
-      {showTabWarning && (
+      {/* Tab Switch Warning Banner (Only in Proctored Mode) */}
+      {isProctored && showTabWarning && (
         <div className="bg-amber-50 dark:bg-amber-950/50 border-b border-amber-200 dark:border-amber-900/60 px-3 sm:px-4 py-2 text-xs text-amber-800 dark:text-amber-200 flex items-center justify-between">
           <div className="flex items-center gap-2 max-w-5xl mx-auto">
             <ShieldAlert className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
@@ -1702,7 +1748,7 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
       )}
 
       {/* AI Proctoring Auto-Termination Modal */}
-      {isTerminatedByProctor && (
+      {isProctored && isTerminatedByProctor && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-md animate-fadeIn">
           <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-md w-full p-6 sm:p-7 text-center space-y-4 shadow-2xl border-2 border-red-500 transition-colors relative overflow-hidden">
             <div className="absolute top-0 inset-x-0 h-1.5 bg-red-600 animate-pulse" />
@@ -1736,7 +1782,7 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
       )}
 
       {/* Anti-Capture Security Privacy Shield Overlay */}
-      {isPrivacyShieldActive && !isTerminatedByProctor && !isSubmitting && (
+      {isProctored && isPrivacyShieldActive && !isTerminatedByProctor && !isSubmitting && (
         <div className="fixed inset-0 z-50 bg-slate-950 flex flex-col items-center justify-center p-6 text-center select-none animate-fadeIn">
           <div className="w-16 h-16 rounded-2xl bg-red-950/80 border-2 border-red-500 text-red-400 flex items-center justify-center mb-4 shadow-xl shadow-red-500/20">
             <ShieldAlert className="w-8 h-8 animate-bounce" />
@@ -1760,6 +1806,40 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
           >
             Resume Exam Session
           </button>
+        </div>
+      )}
+
+      {/* Fullscreen Required Recovery Modal (Shows whenever browser leaves fullscreen during test) */}
+      {!isFullscreen && !submittedRef.current && !isTerminatedByProctor && !isSubmitting && !isPrivacyShieldActive && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md animate-fadeIn select-none">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-md w-full p-6 sm:p-8 text-center space-y-4 shadow-2xl border-2 border-indigo-500/80 transition-colors relative overflow-hidden">
+            <div className="w-16 h-16 rounded-2xl bg-indigo-50 dark:bg-indigo-950/70 text-indigo-600 dark:text-indigo-400 mx-auto flex items-center justify-center border border-indigo-200 dark:border-indigo-800 shadow-lg shadow-indigo-500/20">
+              <Maximize className="w-8 h-8 animate-pulse" />
+            </div>
+
+            <div className="space-y-2">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-50 dark:bg-indigo-950/70 text-indigo-700 dark:text-indigo-300 text-xs font-bold uppercase tracking-wider border border-indigo-200 dark:border-indigo-800">
+                Fullscreen Examination Mode
+              </span>
+              <h3 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">
+                Fullscreen Mode Required
+              </h3>
+              <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+                {isProctored
+                  ? 'This proctored assessment requires full screen mode at all times to maintain test integrity. Exiting fullscreen has been recorded.'
+                  : 'This assessment runs in distraction-free full screen mode. Please click below to return to full screen.'}
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleRequestFullscreen}
+              className="w-full flex items-center justify-center gap-2 py-3 px-5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs sm:text-sm shadow-lg shadow-indigo-600/30 transition-all cursor-pointer active:scale-95"
+            >
+              <Maximize className="w-4 h-4" />
+              <span>Enter Fullscreen Mode</span>
+            </button>
+          </div>
         </div>
       )}
 

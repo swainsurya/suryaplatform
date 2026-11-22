@@ -13,7 +13,8 @@ import {
   ShieldAlert,
   Eye,
   Users,
-  Camera
+  Camera,
+  Maximize
 } from 'lucide-react';
 import { ExamSubmission, Exam } from '../../types/exam';
 
@@ -211,6 +212,9 @@ export const ScorecardDetailModal: React.FC<ScorecardDetailModalProps> = ({
                   } else if (violation.type === 'SCREENSHOT_ATTEMPT' || violation.type === 'SCREEN_RECORDING_DETECTED') {
                     badgeColor = 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300';
                     icon = <ShieldAlert className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />;
+                  } else if (violation.type === 'FULLSCREEN_EXIT') {
+                    badgeColor = 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300';
+                    icon = <Maximize className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />;
                   }
 
                   return (
