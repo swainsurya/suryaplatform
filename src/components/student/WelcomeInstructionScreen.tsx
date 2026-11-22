@@ -23,6 +23,7 @@ import {
   RefreshCw
 } from 'lucide-react';
 import { Exam } from '../../types/exam';
+import { isMobileDevice } from '../../services/deviceUtils';
 
 interface WelcomeInstructionScreenProps {
   exam: Exam;
@@ -124,13 +125,15 @@ export const WelcomeInstructionScreen: React.FC<WelcomeInstructionScreenProps> =
       previewStreamRef.current = null;
     }
 
-    // Trigger full screen mode immediately on direct user click interaction
-    try {
-      if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
-        await document.documentElement.requestFullscreen();
+    // Trigger full screen mode for desktop/laptop devices only (bypassed on mobile)
+    if (!isMobileDevice()) {
+      try {
+        if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
+          await document.documentElement.requestFullscreen();
+        }
+      } catch (fsErr) {
+        console.warn('Fullscreen request bypassed by browser:', fsErr);
       }
-    } catch (fsErr) {
-      console.warn('Fullscreen request bypassed by browser:', fsErr);
     }
 
     setNameError('');
@@ -578,12 +581,14 @@ export const WelcomeInstructionScreen: React.FC<WelcomeInstructionScreenProps> =
               </span>
             </li>
           )}
-          <li className="flex items-start gap-2">
-            <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 dark:bg-indigo-400 mt-1.5 shrink-0" />
-            <span>
-              <strong>Fullscreen Assessment Mode:</strong> Starting the exam activates full screen mode for a focused, distraction-free environment. {isProctored ? 'Exiting fullscreen is tracked as a proctoring infraction.' : ''}
-            </span>
-          </li>
+          {!isMobileDevice() && (
+            <li className="flex items-start gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 dark:bg-indigo-400 mt-1.5 shrink-0" />
+              <span>
+                <strong>Fullscreen Assessment Mode:</strong> Starting the exam activates full screen mode for a focused, distraction-free environment. {isProctored ? 'Exiting fullscreen is tracked as a proctoring infraction.' : ''}
+              </span>
+            </li>
+          )}
           <li className="flex items-start gap-2">
             <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 dark:bg-indigo-400 mt-1.5 shrink-0" />
             <span>

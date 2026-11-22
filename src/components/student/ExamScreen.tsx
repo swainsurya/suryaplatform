@@ -31,6 +31,7 @@ import { useExamStore } from '../../store/useExamStore';
 import { AiProctorBadge } from './AiProctorBadge';
 import { AntiLeakWatermark } from './AntiLeakWatermark';
 import { playGazeWarningChime, playViolationBeep } from '../../services/proctorAudioAlert';
+import { isMobileDevice } from '../../services/deviceUtils';
 
 interface ExamScreenProps {
   exam: Exam;
@@ -111,8 +112,9 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
   const [eliminatedOptions, setEliminatedOptions] = useState<Record<string, number[]>>({});
 
   // Mobile accessibility & tool states
+  const [isMobile] = useState<boolean>(() => isMobileDevice());
   const [textSize, setTextSize] = useState<TextSize>('normal');
-  const [isFullscreen, setIsFullscreen] = useState<boolean>(() => !!document.fullscreenElement);
+  const [isFullscreen, setIsFullscreen] = useState<boolean>(() => isMobileDevice() ? true : !!document.fullscreenElement);
   const [showScratchpad, setShowScratchpad] = useState<boolean>(false);
   const [scratchNotes, setScratchNotes] = useState<string>(() => {
     return localStorage.getItem(`surya_scratch_${exam.id}`) || '';
@@ -292,8 +294,10 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
     }
   }, [isProctored]);
 
-  // Fullscreen change listener & auto-fullscreen attempt on mount
+  // Fullscreen change listener & auto-fullscreen attempt on mount (Desktop/Laptop only)
   useEffect(() => {
+    if (isMobile) return;
+
     // Attempt fullscreen on mount if not yet active
     if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
       document.documentElement.requestFullscreen().catch(() => {
@@ -319,7 +323,7 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
 
     document.addEventListener('fullscreenchange', handleFsChange);
     return () => document.removeEventListener('fullscreenchange', handleFsChange);
-  }, [isProctored, handleProctorViolation]);
+  }, [isMobile, isProctored, handleProctorViolation]);
 
   const currentQuestion = orderedQuestions[currentIndex];
   const questionIds = orderedQuestions.map(q => q.id);
@@ -1809,8 +1813,8 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
         </div>
       )}
 
-      {/* Fullscreen Required Recovery Modal (Shows whenever browser leaves fullscreen during test) */}
-      {!isFullscreen && !submittedRef.current && !isTerminatedByProctor && !isSubmitting && !isPrivacyShieldActive && (
+      {/* Fullscreen Required Recovery Modal (Desktop/Laptop devices only) */}
+      {!isMobile && !isFullscreen && !submittedRef.current && !isTerminatedByProctor && !isSubmitting && !isPrivacyShieldActive && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md animate-fadeIn select-none">
           <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-md w-full p-6 sm:p-8 text-center space-y-4 shadow-2xl border-2 border-indigo-500/80 transition-colors relative overflow-hidden">
             <div className="w-16 h-16 rounded-2xl bg-indigo-50 dark:bg-indigo-950/70 text-indigo-600 dark:text-indigo-400 mx-auto flex items-center justify-center border border-indigo-200 dark:border-indigo-800 shadow-lg shadow-indigo-500/20">
