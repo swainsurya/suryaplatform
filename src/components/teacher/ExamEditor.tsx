@@ -11,7 +11,8 @@ import {
   FileText, 
   FileUp, 
   Sliders,
-  AlertCircle
+  AlertCircle,
+  ShieldCheck
 } from 'lucide-react';
 import { Exam, Question } from '../../types/exam';
 import { McqBuilderManual } from './McqBuilderManual';
@@ -50,6 +51,12 @@ export const ExamEditor: React.FC<ExamEditorProps> = ({
   );
   const [shuffleQuestions, setShuffleQuestions] = useState<boolean>(
     initialExam?.shuffleQuestions ?? false
+  );
+  const [enableAiProctoring, setEnableAiProctoring] = useState<boolean>(
+    initialExam?.enableAiProctoring ?? true
+  );
+  const [maxViolationsAllowed, setMaxViolationsAllowed] = useState<number>(
+    initialExam?.maxViolationsAllowed ?? 3
   );
   const [isActive, setIsActive] = useState<boolean>(initialExam?.isActive ?? true);
   
@@ -112,6 +119,8 @@ export const ExamEditor: React.FC<ExamEditorProps> = ({
       passingPercentage: Number(passingPercentage),
       negativeMarking: Number(negativeMarking),
       shuffleQuestions,
+      enableAiProctoring,
+      maxViolationsAllowed: Number(maxViolationsAllowed),
       createdAt: initialExam?.createdAt || new Date().toISOString(),
       isActive,
       isEnded: isActive ? false : (initialExam?.isEnded ?? false),
@@ -348,6 +357,46 @@ export const ExamEditor: React.FC<ExamEditorProps> = ({
                   className="w-4 h-4 text-indigo-600 rounded cursor-pointer"
                 />
               </label>
+
+              {/* AI Proctoring Settings */}
+              <div className="pt-2 border-t border-slate-100 dark:border-slate-800 space-y-2">
+                <label className="flex items-start justify-between gap-2 text-xs font-medium text-slate-700 dark:text-slate-300 cursor-pointer">
+                  <div className="flex items-start gap-2">
+                    <ShieldCheck className={`w-4 h-4 mt-0.5 shrink-0 ${enableAiProctoring ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-400'}`} />
+                    <div>
+                      <span className="font-semibold text-slate-900 dark:text-slate-100 block">AI Web-Proctored Exam</span>
+                      <span className="text-[10px] text-slate-500 dark:text-slate-400 block leading-tight">
+                        Requires webcam, face tracking, gaze alert, tab lock & screenshot shield
+                      </span>
+                    </div>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={enableAiProctoring}
+                    onChange={(e) => setEnableAiProctoring(e.target.checked)}
+                    className="w-4 h-4 text-indigo-600 rounded cursor-pointer mt-0.5"
+                  />
+                </label>
+
+                {enableAiProctoring && (
+                  <div className="mt-2.5 pl-6 space-y-1">
+                    <label className="text-[11px] font-medium text-slate-600 dark:text-slate-400 block">
+                      Auto-Terminate After Strikes:
+                    </label>
+                    <select
+                      value={maxViolationsAllowed}
+                      onChange={(e) => setMaxViolationsAllowed(Number(e.target.value))}
+                      className="w-full p-1.5 text-xs bg-slate-50 dark:bg-slate-800/80 text-slate-900 dark:text-white border border-slate-300 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    >
+                      <option value={1}>1 Strike (Strict - Terminate immediately)</option>
+                      <option value={2}>2 Strikes (High security)</option>
+                      <option value={3}>3 Strikes (Standard recommended)</option>
+                      <option value={5}>5 Strikes (Lenient)</option>
+                      <option value={999}>Unlimited (Log violations only, no auto-termination)</option>
+                    </select>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 

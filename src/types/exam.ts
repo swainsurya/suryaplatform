@@ -25,6 +25,8 @@ export interface Exam {
   passingPercentage: number; // e.g. 40
   negativeMarking: number; // 0 or negative deduction e.g. 0.25
   shuffleQuestions: boolean;
+  enableAiProctoring?: boolean;
+  maxViolationsAllowed?: number; // default 3 before auto-termination
   createdAt: string;
   isActive: boolean;
   isEnded?: boolean;
@@ -37,6 +39,23 @@ export interface QuestionAnswer {
   selectedOptionIndex: number | null; // null if skipped / unattempted
   isCorrect: boolean;
   marksAwarded: number;
+}
+
+export type ProctoringViolationType = 
+  | 'NO_FACE'
+  | 'MULTIPLE_FACES'
+  | 'LOOKING_AWAY'
+  | 'TAB_SWITCH'
+  | 'FULLSCREEN_EXIT'
+  | 'SCREENSHOT_ATTEMPT'
+  | 'SCREEN_RECORDING_DETECTED';
+
+export interface ProctoringViolation {
+  id: string;
+  type: ProctoringViolationType;
+  message: string;
+  timestamp: string;
+  snapshotDataUrl?: string;
 }
 
 export interface ExamSubmission {
@@ -60,6 +79,10 @@ export interface ExamSubmission {
   percentage: number;
   isPassed: boolean;
   isEndedByTeacher?: boolean;
+  isTerminatedByProctor?: boolean;
+  terminationReason?: string;
+  violations?: ProctoringViolation[];
+  totalViolations?: number;
   answers: QuestionAnswer[];
 }
 

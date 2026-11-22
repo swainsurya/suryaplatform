@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { 
   Clock, 
   Award, 
@@ -17,7 +17,10 @@ import {
   Square,
   Sparkles,
   Zap,
-  Edit2
+  Edit2,
+  Camera,
+  VideoOff,
+  RefreshCw
 } from 'lucide-react';
 import { Exam } from '../../types/exam';
 
@@ -45,14 +48,82 @@ export const WelcomeInstructionScreen: React.FC<WelcomeInstructionScreenProps> =
   const [hasAgreed, setHasAgreed] = useState<boolean>(true);
   const [nameError, setNameError] = useState<string>('');
 
+  // Camera Permission & System Check State
+  const isProctored = exam.enableAiProctoring !== false;
+  const [cameraStatus, setCameraStatus] = useState<'pending' | 'checking' | 'granted' | 'denied'>('pending');
+  const [cameraError, setCameraError] = useState<string>('');
+  const previewVideoRef = useRef<HTMLVideoElement | null>(null);
+  const previewStreamRef = useRef<MediaStream | null>(null);
+
   const passingMarks = Math.ceil((exam.passingPercentage / 100) * exam.totalMarks);
 
-  const handleStartExamClick = () => {
+  const requestCameraPermission = async () => {
+    setCameraStatus('checking');
+    setCameraError('');
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: 'user',
+          width: { ideal: 320 },
+          height: { ideal: 240 },
+        },
+        audio: false,
+      });
+
+      previewStreamRef.current = stream;
+      setCameraStatus('granted');
+
+      if (previewVideoRef.current) {
+        previewVideoRef.current.srcObject = stream;
+        await previewVideoRef.current.play().catch(() => {});
+      }
+    } catch (err: any) {
+      console.error('Camera permission request error:', err);
+      setCameraStatus('denied');
+      setCameraError(
+        err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError'
+          ? 'Camera permission was blocked. Please click the lock or camera icon in your browser URL bar, set Camera to "Allow", and click Try Again.'
+          : err.message || 'Camera device not accessible or not found.'
+      );
+    }
+  };
+
+  // Re-attach video stream if granted
+  useEffect(() => {
+    if (cameraStatus === 'granted' && previewStreamRef.current && previewVideoRef.current) {
+      previewVideoRef.current.srcObject = previewStreamRef.current;
+      previewVideoRef.current.play().catch(() => {});
+    }
+  }, [cameraStatus]);
+
+  // Clean up stream on unmount
+  useEffect(() => {
+    return () => {
+      if (previewStreamRef.current) {
+        previewStreamRef.current.getTracks().forEach((track) => track.stop());
+        previewStreamRef.current = null;
+      }
+    };
+  }, []);
+
+  const handleStartExamClick = async () => {
     if (!name.trim()) {
       setNameError('Please enter your full name before starting the exam.');
       setIsEditingCandidate(true);
       return;
     }
+
+    if (isProctored && cameraStatus !== 'granted') {
+      await requestCameraPermission();
+      return;
+    }
+
+    // Stop preview stream so ExamScreen can take over camera cleanly
+    if (previewStreamRef.current) {
+      previewStreamRef.current.getTracks().forEach((track) => track.stop());
+      previewStreamRef.current = null;
+    }
+
     setNameError('');
     localStorage.setItem('surya_student_name', name.trim());
     onProceedToExam({
@@ -76,9 +147,18 @@ export const WelcomeInstructionScreen: React.FC<WelcomeInstructionScreenProps> =
           <span>Back to Exam Selection</span>
         </button>
 
-        <span className="text-[11px] font-mono font-bold px-2.5 py-1 rounded-full bg-indigo-50 dark:bg-indigo-950/70 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
-          Exam Code: {exam.code}
-        </span>
+        <div className="flex items-center gap-2">
+          <span className={`text-[11px] font-semibold px-2.5 py-1 rounded-full border ${
+            isProctored 
+              ? 'bg-indigo-50 dark:bg-indigo-950/70 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800'
+              : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700'
+          }`}>
+            {isProctored ? 'AI Proctored Exam' : 'Standard Exam'}
+          </span>
+          <span className="text-[11px] font-mono font-bold px-2.5 py-1 rounded-full bg-indigo-50 dark:bg-indigo-950/70 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+            Exam Code: {exam.code}
+          </span>
+        </div>
       </div>
 
       {/* Hero Welcome Banner */}
@@ -228,6 +308,106 @@ export const WelcomeInstructionScreen: React.FC<WelcomeInstructionScreenProps> =
         )}
       </div>
 
+      {/* Mandatory Camera System Check Card (Only when proctoring is enabled) */}
+      {isProctored && (
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4 sm:p-5 shadow-xs space-y-3 transition-colors">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div className="flex items-center gap-2.5">
+              <div className={`p-2.5 rounded-xl ${
+                cameraStatus === 'granted' 
+                  ? 'bg-emerald-100 dark:bg-emerald-950/70 text-emerald-600 dark:text-emerald-400' 
+                  : cameraStatus === 'denied'
+                  ? 'bg-red-100 dark:bg-red-950/70 text-red-600 dark:text-red-400'
+                  : 'bg-indigo-100 dark:bg-indigo-950/70 text-indigo-600 dark:text-indigo-400'
+              }`}>
+                <Camera className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="font-bold text-slate-900 dark:text-white text-xs sm:text-sm flex items-center gap-1.5">
+                  <span>Webcam & AI Proctor Verification</span>
+                  <span className="text-red-500 font-black">*</span>
+                </h3>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  Camera access is mandatory for AI facial verification, multi-person detection, and posture proctoring.
+                </p>
+              </div>
+            </div>
+
+            {cameraStatus === 'granted' && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 shrink-0 self-start sm:self-auto">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                <span>Camera Verified</span>
+              </span>
+            )}
+          </div>
+
+          {/* Camera Preview / Activation State */}
+          {cameraStatus === 'granted' ? (
+            <div className="flex flex-col sm:flex-row items-center gap-4 p-3.5 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700">
+              <div className="relative w-40 h-30 bg-black rounded-lg overflow-hidden shrink-0 border border-emerald-500/50 shadow-inner">
+                <video
+                  ref={previewVideoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  className="w-full h-full object-cover -scale-x-100"
+                />
+                <div className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded bg-emerald-600 text-white text-[9px] font-bold flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                  <span>Live Feed</span>
+                </div>
+              </div>
+              <div className="space-y-1 text-center sm:text-left">
+                <h4 className="font-bold text-xs text-slate-900 dark:text-white">Camera is operating properly</h4>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                  Your face is centered in the feed. The AI vision system will continuously monitor for single-candidate focus during the exam.
+                </p>
+                <span className="inline-block text-[10px] text-emerald-600 dark:text-emerald-400 font-bold">
+                  ✓ Ready to proceed to exam
+                </span>
+              </div>
+            </div>
+          ) : cameraStatus === 'denied' ? (
+            <div className="p-3.5 bg-red-50 dark:bg-red-950/40 rounded-xl border border-red-200 dark:border-red-900/60 space-y-2">
+              <div className="flex items-start gap-2.5 text-red-900 dark:text-red-200 text-xs">
+                <VideoOff className="w-5 h-5 text-red-600 dark:text-red-400 shrink-0 mt-0.5" />
+                <div>
+                  <strong className="block font-bold">Camera Access Required</strong>
+                  <p className="text-[11px] text-red-800 dark:text-red-300 mt-0.5 leading-snug">
+                    {cameraError}
+                  </p>
+                </div>
+              </div>
+              <div className="flex justify-end pt-1">
+                <button
+                  type="button"
+                  onClick={requestCameraPermission}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-bold transition-colors cursor-pointer"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span>Try Again</span>
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-3.5 bg-indigo-50/60 dark:bg-indigo-950/40 rounded-xl border border-indigo-100 dark:border-indigo-900/50">
+              <p className="text-xs text-indigo-900 dark:text-indigo-200">
+                Please click the button to prompt your browser for camera permission and test your video feed before starting.
+              </p>
+              <button
+                type="button"
+                onClick={requestCameraPermission}
+                disabled={cameraStatus === 'checking'}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-xs transition-colors cursor-pointer shrink-0"
+              >
+                <Camera className="w-4 h-4" />
+                <span>{cameraStatus === 'checking' ? 'Requesting Access...' : 'Allow Camera & Test Video'}</span>
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* 4 Stat Overview Grid */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-4">
         
@@ -358,10 +538,26 @@ export const WelcomeInstructionScreen: React.FC<WelcomeInstructionScreenProps> =
               <strong>Instant Auto-Save:</strong> Selected options are saved automatically. You can jump between questions and change choices before final submission.
             </span>
           </li>
+          {isProctored && (
+            <li className="flex items-start gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 dark:bg-indigo-400 mt-1.5 shrink-0" />
+              <span>
+                <strong>AI Camera & Posture Proctoring:</strong> Your camera actively monitors for zero faces (leaving the desk), multiple people in frame, and persistent looking away. Exceeding {exam.maxViolationsAllowed ?? 3} violations will <strong>automatically terminate</strong> and disqualify your exam.
+              </span>
+            </li>
+          )}
+          {isProctored && (
+            <li className="flex items-start gap-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 dark:bg-indigo-400 mt-1.5 shrink-0" />
+              <span>
+                <strong>Anti-Screenshot & Capture Shield:</strong> Screenshots (PrtScn), Snipping Tool, screen recording, and window defocusing are strictly blocked by an automatic Security Privacy Shield.
+              </span>
+            </li>
+          )}
           <li className="flex items-start gap-2">
             <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 dark:bg-indigo-400 mt-1.5 shrink-0" />
             <span>
-              <strong>Anti-Cheat & Tab Monitoring:</strong> Window changes and tab switches are detected and warned. Stay on this window.
+              <strong>Anti-Cheat & Tab Monitoring:</strong> Window changes, tab switches, copy/pasting, and right-clicks are strictly blocked and logged as violations.
             </span>
           </li>
           <li className="flex items-start gap-2">
@@ -414,9 +610,19 @@ export const WelcomeInstructionScreen: React.FC<WelcomeInstructionScreenProps> =
                 : 'bg-slate-300 dark:bg-slate-800 text-slate-500 dark:text-slate-600 cursor-not-allowed shadow-none'
             }`}
           >
-            <Zap className="w-4 h-4 fill-current" />
-            <span>Start Exam</span>
-            <ArrowRight className="w-4 h-4 stroke-[2.5]" />
+            {(!isProctored || cameraStatus === 'granted') ? (
+              <>
+                <Zap className="w-4 h-4 fill-current" />
+                <span>Start Exam</span>
+                <ArrowRight className="w-4 h-4 stroke-[2.5]" />
+              </>
+            ) : (
+              <>
+                <Camera className="w-4 h-4" />
+                <span>{cameraStatus === 'checking' ? 'Testing Camera...' : 'Verify Camera & Start Exam'}</span>
+                <ArrowRight className="w-4 h-4 stroke-[2.5]" />
+              </>
+            )}
           </button>
         </div>
       </div>

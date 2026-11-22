@@ -25,16 +25,28 @@ import {
   Check,
   SlidersHorizontal
 } from 'lucide-react';
-import { Exam, SanitizedQuestion } from '../../types/exam';
+import { Exam, SanitizedQuestion, ProctoringViolation } from '../../types/exam';
 import { QuestionPalette } from './QuestionPalette';
 import { useExamStore } from '../../store/useExamStore';
+import { AiProctorBadge } from './AiProctorBadge';
+import { AntiLeakWatermark } from './AntiLeakWatermark';
+import { playGazeWarningChime, playViolationBeep } from '../../services/proctorAudioAlert';
 
 interface ExamScreenProps {
   exam: Exam;
   studentName: string;
   studentRollNumber?: string;
   studentEmail?: string;
-  onFinishExam: (userAnswers: Record<string, number | null>, timeSpentSeconds: number, isEndedByTeacher?: boolean) => void;
+  onFinishExam: (
+    userAnswers: Record<string, number | null>, 
+    timeSpentSeconds: number, 
+    isEndedByTeacher?: boolean,
+    proctoringData?: {
+      isTerminatedByProctor?: boolean;
+      terminationReason?: string;
+      violations?: ProctoringViolation[];
+    }
+  ) => void;
   onCancel?: () => void;
 }
 
@@ -43,6 +55,7 @@ type TextSize = 'normal' | 'large' | 'xlarge';
 export const ExamScreen: React.FC<ExamScreenProps> = ({
   exam,
   studentName,
+  studentRollNumber,
   onFinishExam,
 }) => {
   const { exams, activeTestSession, updateExamProgress, theme, toggleTheme } = useExamStore();
@@ -118,6 +131,24 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
   const [submitStage, setSubmitStage] = useState<number>(1);
   const [submitStatusText, setSubmitStatusText] = useState<string>('Syncing responses with Cloud Database...');
 
+  // AI Proctoring & Anti-Cheat State
+  const isProctored = exam.enableAiProctoring !== false;
+  const maxViolationsAllowed = exam.maxViolationsAllowed || 3;
+  const [violations, setViolations] = useState<ProctoringViolation[]>([]);
+  const violationsRef = useRef<ProctoringViolation[]>([]);
+  const [activeViolationAlert, setActiveViolationAlert] = useState<ProctoringViolation | null>(null);
+  const [isTerminatedByProctor, setIsTerminatedByProctor] = useState<boolean>(false);
+  const [terminationReason, setTerminationReason] = useState<string>('');
+  const [terminationCountdown, setTerminationCountdown] = useState<number>(4);
+  const isTerminatedRef = useRef<boolean>(false);
+
+  // Anti-Screenshot & Screen-Recording Privacy Shield State
+  const [isPrivacyShieldActive, setIsPrivacyShieldActive] = useState<boolean>(false);
+  const [privacyShieldReason, setPrivacyShieldReason] = useState<string>('');
+
+  // Looking Away / Gaze Shift State for Question Obfuscation ("Blind Mode")
+  const [isLookingAway, setIsLookingAway] = useState<boolean>(false);
+
   const [sessionStartTime] = useState<number>(() => activeTestSession?.examStartTime || Date.now());
   const startTimeRef = useRef<number>(sessionStartTime);
   const submittedRef = useRef<boolean>(false);
@@ -156,7 +187,11 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
   }, []);
 
   // Final submission evaluation securely passed to handler with DB loading animation
-  const handleFinalSubmit = useCallback(async (endedByTeacher: boolean = false) => {
+  const handleFinalSubmit = useCallback(async (
+    endedByTeacher: boolean = false,
+    terminatedByProctor: boolean = false,
+    proctorReason?: string
+  ) => {
     if (submittedRef.current) return;
     submittedRef.current = true;
     setIsSubmitting(true);
@@ -167,7 +202,11 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
 
     // Staged animation feedback while database fetches & synchronizes
     setSubmitStage(1);
-    setSubmitStatusText('Encrypting & packaging candidate responses...');
+    setSubmitStatusText(
+      terminatedByProctor
+        ? 'Recording proctoring violations & locking assessment...'
+        : 'Encrypting & packaging candidate responses...'
+    );
 
     const timer1 = setTimeout(() => {
       setSubmitStage(2);
@@ -180,7 +219,16 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
     }, 1600);
 
     const finishPromise = Promise.resolve(
-      onFinishExam(userAnswersRef.current, Math.min(timeSpentSeconds, totalDurationSeconds), endedByTeacher)
+      onFinishExam(
+        userAnswersRef.current, 
+        Math.min(timeSpentSeconds, totalDurationSeconds), 
+        endedByTeacher,
+        {
+          isTerminatedByProctor: terminatedByProctor,
+          terminationReason: proctorReason,
+          violations: violationsRef.current
+        }
+      )
     );
     const minDelay = new Promise((resolve) => setTimeout(resolve, 2400));
 
@@ -191,6 +239,64 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
       clearTimeout(timer2);
     }
   }, [activeTestSession?.examStartTime, onFinishExam, totalDurationSeconds]);
+
+  // Handle violations detected by AI computer vision or browser sensors
+  const handleProctorViolation = useCallback((violation: ProctoringViolation) => {
+    if (!isProctored || submittedRef.current || isTerminatedRef.current) return;
+
+    // Throttle duplicates of same type within 2.5s
+    const prev = violationsRef.current;
+    if (prev.length > 0) {
+      const last = prev[prev.length - 1];
+      if (last.type === violation.type) {
+        const lastTimestamp = parseInt(last.id.split('-')[1] || '0');
+        if (Date.now() - lastTimestamp < 2500) {
+          return;
+        }
+      }
+    }
+
+    const updated = [...prev, violation];
+    violationsRef.current = updated;
+    setViolations(updated);
+    setActiveViolationAlert(violation);
+
+    // Play audible violation alert beep
+    playViolationBeep();
+
+    // Auto-dismiss alert toast after 4.5 seconds
+    setTimeout(() => {
+      setActiveViolationAlert((cur) => (cur?.id === violation.id ? null : cur));
+    }, 4500);
+
+    // AUTO-TERMINATE IF MAX VIOLATIONS REACHED
+    if (updated.length >= maxViolationsAllowed && !isTerminatedRef.current) {
+      isTerminatedRef.current = true;
+      setIsTerminatedByProctor(true);
+      setTerminationReason(violation.message);
+
+      let timeLeft = 4;
+      setTerminationCountdown(timeLeft);
+      const countdownInterval = setInterval(() => {
+        timeLeft -= 1;
+        setTerminationCountdown(timeLeft);
+        if (timeLeft <= 0) {
+          clearInterval(countdownInterval);
+          handleFinalSubmit(false, true, `Terminated by AI Proctor: ${violation.message}`);
+        }
+      }, 1000);
+    }
+  }, [isProctored, maxViolationsAllowed, handleFinalSubmit]);
+
+  // Handle live candidate gaze shift (looking away from screen)
+  const handleGazeShift = useCallback((lookingAway: boolean) => {
+    if (!isProctored) return;
+    setIsLookingAway(lookingAway);
+    if (lookingAway) {
+      // Play audible warning chime to snap candidate's attention back
+      playGazeWarningChime();
+    }
+  }, [isProctored]);
 
   const currentQuestion = orderedQuestions[currentIndex];
   const questionIds = orderedQuestions.map(q => q.id);
@@ -274,17 +380,150 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
     return () => clearInterval(timerInterval);
   }, [activeTestSession?.examEndTime, handleFinalSubmit]);
 
-  // Anti-cheat tab switch detection
+  const wipeClipboard = useCallback(() => {
+    try {
+      if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+        navigator.clipboard.writeText('⚠️ Screenshots, screen recording, and text copying are strictly disabled in SuryaPlatform.');
+      }
+    } catch {}
+  }, []);
+
+  const activatePrivacyShield = useCallback((reason: string) => {
+    setIsPrivacyShieldActive(true);
+    setPrivacyShieldReason(reason);
+    wipeClipboard();
+  }, [wipeClipboard]);
+
+  // Anti-cheat tab switch & window focus detection
   useEffect(() => {
     const handleVisibilityChange = () => {
-      if (document.hidden && !submittedRef.current) {
-        setTabSwitchCount(prev => prev + 1);
+      if (document.hidden && !submittedRef.current && !isTerminatedRef.current) {
+        setTabSwitchCount((prev) => prev + 1);
         setShowTabWarning(true);
+        if (isProctored) {
+          activatePrivacyShield('Window minimized or tab switched.');
+          handleProctorViolation({
+            id: `viol-${Date.now()}`,
+            type: 'TAB_SWITCH',
+            message: 'Tab switch / browser window minimized.',
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+          });
+        }
+      }
+    };
+
+    const handleWindowBlur = () => {
+      if (!submittedRef.current && !document.hidden && !isTerminatedRef.current) {
+        if (isProctored) {
+          activatePrivacyShield('Exam window lost focus (Snipping tool, screen capture, or external app detected).');
+          handleProctorViolation({
+            id: `viol-${Date.now()}`,
+            type: 'SCREEN_RECORDING_DETECTED',
+            message: 'Exam window lost focus (screenshot tool or screen recorder detected).',
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+          });
+        }
       }
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('blur', handleWindowBlur);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('blur', handleWindowBlur);
+    };
+  }, [isProctored, activatePrivacyShield, handleProctorViolation]);
+
+  // Anti-Screenshot (PrtScn, Win+Shift+S, Cmd+Shift+3/4, Ctrl+P) Interception
+  useEffect(() => {
+    const handleScreenshotKeys = (e: KeyboardEvent) => {
+      const isPrtScn = e.key === 'PrintScreen' || e.keyCode === 44 || e.code === 'PrintScreen';
+      const isWinShiftS = e.shiftKey && (e.metaKey || e.key === 'Meta') && (e.key === 's' || e.key === 'S');
+      const isMacScreenshot = (e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === '3' || e.key === '4' || e.key === '5');
+      const isPrintShortcut = (e.ctrlKey || e.metaKey) && (e.key === 'p' || e.key === 'P');
+      const isDevTools = e.key === 'F12' || ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'I' || e.key === 'i' || e.key === 'J' || e.key === 'j'));
+
+      if (isPrtScn || isWinShiftS || isMacScreenshot || isPrintShortcut || isDevTools) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        if (isProctored) {
+          activatePrivacyShield(
+            isPrtScn
+              ? 'PrintScreen (PrtScn) key intercepted. Screen captures are disabled.'
+              : isPrintShortcut
+              ? 'Page printing / PDF exporting is disabled during exams.'
+              : 'Screen capture shortcut intercepted.'
+          );
+
+          handleProctorViolation({
+            id: `viol-${Date.now()}`,
+            type: 'SCREENSHOT_ATTEMPT',
+            message: isPrtScn
+              ? 'PrintScreen (PrtScn) key press intercepted.'
+              : isPrintShortcut
+              ? 'Attempted to print or export page.'
+              : 'Screen capture / recording shortcut intercepted.',
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+          });
+        }
+        return false;
+      }
+    };
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (isProctored && (e.key === 'PrintScreen' || e.keyCode === 44 || e.code === 'PrintScreen')) {
+        wipeClipboard();
+      }
+    };
+
+    window.addEventListener('keydown', handleScreenshotKeys, true);
+    window.addEventListener('keyup', handleKeyUp, true);
+    return () => {
+      window.removeEventListener('keydown', handleScreenshotKeys, true);
+      window.removeEventListener('keyup', handleKeyUp, true);
+    };
+  }, [isProctored, activatePrivacyShield, handleProctorViolation, wipeClipboard]);
+
+  // Block any in-browser screen sharing or extension recording requests
+  useEffect(() => {
+    if (typeof navigator !== 'undefined' && navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia) {
+      const origGetDisplayMedia = navigator.mediaDevices.getDisplayMedia;
+      navigator.mediaDevices.getDisplayMedia = async () => {
+        handleProctorViolation({
+          id: `viol-${Date.now()}`,
+          type: 'SCREEN_RECORDING_DETECTED',
+          message: 'Unauthorized screen sharing or screen recording request blocked.',
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+        });
+        throw new Error('Screen recording is strictly disabled during this proctored exam.');
+      };
+      return () => {
+        navigator.mediaDevices.getDisplayMedia = origGetDisplayMedia;
+      };
+    }
+  }, [handleProctorViolation]);
+
+  // Prevent Copy, Cut, Paste, Drag, and Context Menu Right-Click
+  useEffect(() => {
+    const preventAction = (e: Event) => {
+      e.preventDefault();
+      return false;
+    };
+    document.addEventListener('copy', preventAction);
+    document.addEventListener('cut', preventAction);
+    document.addEventListener('paste', preventAction);
+    document.addEventListener('contextmenu', preventAction);
+    document.addEventListener('dragstart', preventAction);
+    document.addEventListener('selectstart', preventAction);
+    return () => {
+      document.removeEventListener('copy', preventAction);
+      document.removeEventListener('cut', preventAction);
+      document.removeEventListener('paste', preventAction);
+      document.removeEventListener('contextmenu', preventAction);
+      document.removeEventListener('dragstart', preventAction);
+      document.removeEventListener('selectstart', preventAction);
+    };
   }, []);
 
   // Format timer
@@ -486,7 +725,16 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
   const currentEliminated = currentQuestion ? (eliminatedOptions[currentQuestion.id] || []) : [];
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col transition-colors duration-200">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col transition-colors duration-200 exam-security-protected select-none relative">
+      
+      {/* Background Anti-Leak Identification Watermark */}
+      {isProctored && (
+        <AntiLeakWatermark
+          studentName={studentName}
+          studentRollNumber={studentRollNumber}
+          examCode={exam.code}
+        />
+      )}
       
       {/* Sticky Clean Exam Header Bar */}
       <header className="sticky top-0 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800 shadow-xs transition-colors">
@@ -768,6 +1016,25 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
 
       </header>
 
+      {/* Real-time AI Proctor Warning Banner */}
+      {activeViolationAlert && !isTerminatedByProctor && (
+        <div className="bg-red-600 text-white px-3 sm:px-4 py-2 text-xs flex items-center justify-between shadow-md transition-all animate-fadeIn">
+          <div className="flex items-center gap-2 max-w-5xl mx-auto">
+            <ShieldAlert className="w-4 h-4 text-white shrink-0 animate-pulse" />
+            <span className="text-[11px] sm:text-xs font-semibold">
+              <strong className="uppercase tracking-wider">AI Proctor Warning:</strong> {activeViolationAlert.message} ({violations.length}/{maxViolationsAllowed} violations logged)
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setActiveViolationAlert(null)}
+            className="text-white/80 hover:text-white p-1 cursor-pointer"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+
       {/* Tab Switch Warning Banner */}
       {showTabWarning && (
         <div className="bg-amber-50 dark:bg-amber-950/50 border-b border-amber-200 dark:border-amber-900/60 px-3 sm:px-4 py-2 text-xs text-amber-800 dark:text-amber-200 flex items-center justify-between">
@@ -797,10 +1064,37 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
         {/* Left 2 Cols: Question Card */}
         <div className="lg:col-span-2 space-y-3 sm:space-y-4">
           {currentQuestion && (
-            <div className="bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl border border-slate-200 dark:border-slate-800 p-3.5 sm:p-7 shadow-xs flex flex-col justify-between min-h-[440px] sm:min-h-[500px] transition-colors relative">
+            <div className="bg-white dark:bg-slate-900 rounded-2xl sm:rounded-3xl border border-slate-200 dark:border-slate-800 p-3.5 sm:p-7 shadow-xs flex flex-col justify-between min-h-[440px] sm:min-h-[500px] transition-colors relative overflow-hidden">
               
-              {/* Question Meta, Tags & Actions */}
-              <div>
+              {/* Looking Away Obfuscation Overlay ("Blind Mode") */}
+              {isProctored && isLookingAway && !isTerminatedByProctor && !isPrivacyShieldActive && (
+                <div className="absolute inset-0 z-20 backdrop-blur-md bg-slate-900/80 dark:bg-slate-950/90 rounded-2xl sm:rounded-3xl flex flex-col items-center justify-center p-6 text-center select-none animate-fadeIn transition-all">
+                  <div className="w-14 h-14 rounded-2xl bg-amber-500/20 border-2 border-amber-500/50 text-amber-400 flex items-center justify-center mb-3 shadow-lg shadow-amber-500/10 animate-pulse">
+                    <EyeOff className="w-7 h-7" />
+                  </div>
+                  <span className="px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-bold text-[10px] uppercase tracking-wider border border-amber-500/40 mb-2">
+                    Gaze Shift Detected
+                  </span>
+                  <h4 className="font-black text-base sm:text-lg text-white">
+                    Question Obscured
+                  </h4>
+                  <p className="text-xs text-amber-200/90 mt-1 max-w-sm leading-relaxed">
+                    Please face forward and keep your eyes directly on the exam screen to view question content and options.
+                  </p>
+                  <div className="mt-3 flex items-center gap-1.5 text-[11px] text-slate-300 font-mono">
+                    <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
+                    <span>Continuous side glances will log violation strikes</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Question Content & Options (Deeply blurred when looking away) */}
+              <div 
+                className="flex-1 flex flex-col justify-between transition-all duration-200"
+                style={{ filter: (isProctored && isLookingAway) ? 'blur(12px)' : 'none' }}
+              >
+                {/* Question Meta, Tags & Actions */}
+                <div>
                 <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-slate-100 dark:border-slate-800 mb-3 sm:mb-5">
                   
                   {/* Question & Mark Details */}
@@ -968,6 +1262,7 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
                 </div>
               </div>
 
+              </div>
             </div>
           )}
         </div>
@@ -1392,6 +1687,79 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
             </div>
 
           </div>
+        </div>
+      )}
+
+      {/* AI Computer Vision Live Proctoring Floating Feed */}
+      {isProctored && (
+        <AiProctorBadge
+          onViolation={handleProctorViolation}
+          maxViolationsAllowed={maxViolationsAllowed}
+          totalViolations={violations.length}
+          isExamTerminated={isTerminatedByProctor}
+          onGazeShiftChange={handleGazeShift}
+        />
+      )}
+
+      {/* AI Proctoring Auto-Termination Modal */}
+      {isTerminatedByProctor && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-md animate-fadeIn">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-md w-full p-6 sm:p-7 text-center space-y-4 shadow-2xl border-2 border-red-500 transition-colors relative overflow-hidden">
+            <div className="absolute top-0 inset-x-0 h-1.5 bg-red-600 animate-pulse" />
+            <div className="w-16 h-16 rounded-2xl bg-red-100 dark:bg-red-950/60 text-red-600 dark:text-red-400 mx-auto flex items-center justify-center border border-red-200 dark:border-red-900/60 shadow-lg shadow-red-500/20">
+              <ShieldAlert className="w-9 h-9 animate-bounce" />
+            </div>
+            <div className="space-y-2">
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-50 dark:bg-red-950/70 text-red-700 dark:text-red-300 text-xs font-black uppercase tracking-wider border border-red-200 dark:border-red-800">
+                Disqualified by AI Proctor
+              </div>
+              <h3 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">
+                Exam Terminated
+              </h3>
+              <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+                You have reached the maximum allowed proctoring violations ({violations.length}/{maxViolationsAllowed}).
+              </p>
+              <div className="p-3 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/60 text-left text-xs text-red-800 dark:text-red-300">
+                <span className="font-bold block mb-0.5">Final Violation Trigger:</span>
+                <span className="italic">{terminationReason || 'Face / Gaze Proctoring Anomaly'}</span>
+              </div>
+            </div>
+
+            <div className="pt-2">
+              <div className="p-3 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs text-slate-600 dark:text-slate-300 flex items-center justify-center gap-2 font-mono font-bold">
+                <div className="w-4 h-4 border-2 border-red-600 border-t-transparent rounded-full animate-spin" />
+                <span>Submitting test session in {terminationCountdown}s...</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Anti-Capture Security Privacy Shield Overlay */}
+      {isPrivacyShieldActive && !isTerminatedByProctor && !isSubmitting && (
+        <div className="fixed inset-0 z-50 bg-slate-950 flex flex-col items-center justify-center p-6 text-center select-none animate-fadeIn">
+          <div className="w-16 h-16 rounded-2xl bg-red-950/80 border-2 border-red-500 text-red-400 flex items-center justify-center mb-4 shadow-xl shadow-red-500/20">
+            <ShieldAlert className="w-8 h-8 animate-bounce" />
+          </div>
+          <span className="px-3 py-1 rounded-full bg-red-500/20 text-red-300 font-bold text-xs uppercase tracking-wider border border-red-500/40 mb-3">
+            Anti-Capture Privacy Protection
+          </span>
+          <h2 className="text-xl sm:text-2xl font-black text-white max-w-lg mb-2">
+            Security Privacy Shield Active
+          </h2>
+          <p className="text-xs sm:text-sm text-red-200/90 max-w-md mb-2 leading-relaxed">
+            {privacyShieldReason || 'Screenshots, screen recording tools, and window defocusing are strictly blocked.'}
+          </p>
+          <p className="text-[11px] text-slate-400 max-w-sm mb-6">
+            This event has been logged in your proctoring audit log. Click below to resume your assessment.
+          </p>
+          <button
+            type="button"
+            onClick={() => setIsPrivacyShieldActive(false)}
+            className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-red-600 to-rose-700 hover:from-red-500 hover:to-rose-600 text-white font-bold text-xs shadow-lg shadow-red-600/30 transition-all cursor-pointer active:scale-95"
+          >
+            Resume Exam Session
+          </button>
         </div>
       )}
 

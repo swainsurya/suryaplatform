@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { Exam, ExamSubmission, QuestionAnswer, ActiveExamSession } from '../types/exam';
+import { Exam, ExamSubmission, QuestionAnswer, ActiveExamSession, ProctoringViolation } from '../types/exam';
 import { 
   getExams, 
   saveExam as saveExamToLocal, 
@@ -53,7 +53,16 @@ interface ExamState {
   logoutTeacher: () => void;
   startExam: (exam: Exam, studentDetails: { name: string; rollNumber?: string; email?: string }) => void;
   updateExamProgress: (updates: { userAnswers?: Record<string, number | null>; markedForReview?: string[]; currentIndex?: number }) => void;
-  finishExam: (userAnswers: Record<string, number | null>, timeSpentSeconds: number, isEndedByTeacher?: boolean) => Promise<void>;
+  finishExam: (
+    userAnswers: Record<string, number | null>, 
+    timeSpentSeconds: number, 
+    isEndedByTeacher?: boolean,
+    proctoringData?: {
+      isTerminatedByProctor?: boolean;
+      terminationReason?: string;
+      violations?: ProctoringViolation[];
+    }
+  ) => Promise<void>;
   exitToHome: () => void;
   saveExam: (exam: Exam) => Promise<void>;
   endExam: (examId: string) => Promise<void>;
@@ -293,7 +302,7 @@ export const useExamStore = create<ExamState>((set, get) => ({
     set({ activeTestSession: updated });
   },
 
-  finishExam: async (userAnswers, timeSpentSeconds, isEndedByTeacher = false) => {
+  finishExam: async (userAnswers, timeSpentSeconds, isEndedByTeacher = false, proctoringData) => {
     const { activeTestSession } = get();
     if (!activeTestSession) return;
     const completedExam = activeTestSession.exam;
@@ -359,6 +368,10 @@ export const useExamStore = create<ExamState>((set, get) => ({
       percentage: Number(finalPercentage.toFixed(2)),
       isPassed,
       isEndedByTeacher: Boolean(isEndedByTeacher),
+      isTerminatedByProctor: Boolean(proctoringData?.isTerminatedByProctor),
+      terminationReason: proctoringData?.terminationReason,
+      violations: proctoringData?.violations || [],
+      totalViolations: proctoringData?.violations?.length || 0,
       answers: answersList,
     };
 

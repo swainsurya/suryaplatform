@@ -9,7 +9,8 @@ import {
   Printer, 
   ArrowLeft, 
   Award,
-  AlertTriangle
+  AlertTriangle,
+  ShieldAlert
 } from 'lucide-react';
 import { ExamSubmission, Exam } from '../../types/exam';
 
@@ -89,6 +90,24 @@ export const StudentScorecard: React.FC<StudentScorecardProps> = ({
               The teacher ended this examination from the administration panel.
               All your recorded answers were submitted and evaluated immediately.
             </p>
+          </div>
+        </div>
+      )}
+
+      {/* Proctor Disqualification / Termination Alert */}
+      {submission.isTerminatedByProctor && (
+        <div className="bg-red-50 dark:bg-red-950/40 border-2 border-red-300 dark:border-red-900/60 p-4 rounded-2xl flex items-start gap-3.5 text-red-900 dark:text-red-200">
+          <ShieldAlert className="w-6 h-6 text-red-600 dark:text-red-400 shrink-0 mt-0.5 animate-pulse" />
+          <div className="space-y-1">
+            <h3 className="font-extrabold text-sm sm:text-base text-red-800 dark:text-red-300">
+              Exam Terminated & Flagged by AI Proctor
+            </h3>
+            <p className="text-xs text-red-700 dark:text-red-200 leading-relaxed">
+              {submission.terminationReason || 'This exam was automatically terminated and submitted due to exceeding allowed proctoring violations.'}
+            </p>
+            <span className="inline-block font-mono text-[11px] bg-red-100 dark:bg-red-900/60 px-2 py-0.5 rounded text-red-800 dark:text-red-200 font-bold">
+              Total Violations Recorded: {submission.totalViolations || submission.violations?.length || 0}
+            </span>
           </div>
         </div>
       )}

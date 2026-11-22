@@ -75,6 +75,22 @@ html.dark ::-webkit-scrollbar-thumb:hover {
   scrollbar-width: none;  /* Firefox */
 }
 
+/* Anti-Screen Capture, Anti-Print & Selection Lockdown */
+@media print {
+  .exam-security-protected {
+    display: none !important;
+    visibility: hidden !important;
+  }
+}
+
+.exam-security-protected {
+  user-select: none !important;
+  -webkit-user-select: none !important;
+  -moz-user-select: none !important;
+  -ms-user-select: none !important;
+  -webkit-touch-callout: none !important;
+}
+
 /* Print optimizations for clean scorecard and test download */
 @media print {
   body {
