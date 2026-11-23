@@ -65,10 +65,10 @@ let firebaseApp: FirebaseApp | null = null;
 let firestoreDb: Firestore | null = null;
 
 /**
- * Initialize or get active Firebase Firestore instance
+ * Initialize or get active Firebase App instance
  */
-export function getFirebaseDb(): Firestore | null {
-  if (firestoreDb) return firestoreDb;
+export function getFirebaseAppInstance(): FirebaseApp | null {
+  if (firebaseApp) return firebaseApp;
 
   try {
     const config = {
@@ -82,13 +82,30 @@ export function getFirebaseDb(): Firestore | null {
       firebaseApp = getApp();
     }
 
+    return firebaseApp;
+  } catch (error) {
+    console.warn('Firebase app initialization notice:', error);
+    return null;
+  }
+}
+
+/**
+ * Initialize or get active Firebase Firestore instance
+ */
+export function getFirebaseDb(): Firestore | null {
+  if (firestoreDb) return firestoreDb;
+
+  const app = getFirebaseAppInstance();
+  if (!app) return null;
+
+  try {
     // Initialize with ignoreUndefinedProperties to prevent crashes on optional MCQ fields
     try {
-      firestoreDb = initializeFirestore(firebaseApp, {
+      firestoreDb = initializeFirestore(app, {
         ignoreUndefinedProperties: true
       });
     } catch {
-      firestoreDb = getFirestore(firebaseApp);
+      firestoreDb = getFirestore(app);
     }
 
     return firestoreDb;

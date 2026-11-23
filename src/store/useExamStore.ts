@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { Exam, Question, ExamSubmission, QuestionAnswer, ActiveExamSession, ProctoringViolation, LiveCandidateSession } from '../types/exam';
+import { Exam, Question, ExamSubmission, QuestionAnswer, ActiveExamSession, ProctoringViolation, LiveCandidateSession, TeacherUser } from '../types/exam';
 import { 
   getExams, 
   saveExam as saveExamToLocal, 
@@ -41,6 +41,12 @@ import {
   terminateLiveCandidateSession
 } from '../services/firebase';
 import { shuffleArray, cleanQuestionStatement } from '../services/examUtils';
+import { 
+  subscribeToTeacherAuth, 
+  logoutTeacherAuth, 
+  getCachedTeacherUser,
+  isAuthorizedTeacher
+} from '../services/firebaseAuth';
 
 function mergeCandidateSessions(local: LiveCandidateSession[], remote: LiveCandidateSession[]): LiveCandidateSession[] {
   const map = new Map<string, LiveCandidateSession>();
@@ -67,6 +73,7 @@ interface ExamState {
   activeLiveSessionId: string | null;
   currentView: 'student' | 'teacher';
   isTeacherAuth: boolean;
+  teacherUser: TeacherUser | null;
   activeTestSession: ActiveExamSession | null;
   activeScorecard: {
     submission: ExamSubmission;
@@ -82,8 +89,9 @@ interface ExamState {
   setTheme: (theme: 'light' | 'dark') => void;
   setCurrentView: (view: 'student' | 'teacher') => void;
   setUrlExamCode: (code: string) => void;
-  loginTeacher: () => void;
-  logoutTeacher: () => void;
+  setTeacherUser: (user: TeacherUser | null) => void;
+  loginTeacher: (user?: TeacherUser) => void;
+  logoutTeacher: () => Promise<void>;
   startExam: (exam: Exam, studentDetails: { name: string; rollNumber?: string; email?: string }) => void;
   updateExamProgress: (updates: { userAnswers?: Record<string, number | null>; markedForReview?: string[]; currentIndex?: number }) => void;
   sendLiveHeartbeat: (updates: Partial<LiveCandidateSession>) => Promise<void>;
@@ -118,6 +126,7 @@ export const useExamStore = create<ExamState>((set, get) => ({
   activeLiveSessionId: null,
   currentView: 'student',
   isTeacherAuth: false,
+  teacherUser: null,
   activeTestSession: null,
   activeScorecard: null,
   urlExamCode: '',
@@ -139,7 +148,8 @@ export const useExamStore = create<ExamState>((set, get) => ({
     }
     set({ theme: savedTheme });
 
-    const isAuth = isTeacherAuthenticated();
+    const cachedTeacher = getCachedTeacherUser();
+    const isAuth = Boolean(cachedTeacher && isAuthorizedTeacher(cachedTeacher.email));
     const localExams = getExams();
     const localSubs = getSubmissions();
     const localLive = getLiveSessionsFromLocal();
@@ -167,9 +177,21 @@ export const useExamStore = create<ExamState>((set, get) => ({
       liveSessions: localLive,
       activeLiveSessionId: restoredSession?.sessionId || null,
       isTeacherAuth: isAuth,
+      teacherUser: cachedTeacher,
       activeTestSession: restoredSession,
       currentView: restoredSession ? 'student' : (isAuth ? 'teacher' : 'student'),
       isLoading: false
+    });
+
+    // Listen for Firebase Auth state changes
+    subscribeToTeacherAuth((fbUser) => {
+      if (fbUser && isAuthorizedTeacher(fbUser.email)) {
+        setTeacherAuthenticated(true);
+        set({ isTeacherAuth: true, teacherUser: fbUser });
+      } else {
+        setTeacherAuthenticated(false);
+        set({ isTeacherAuth: false, teacherUser: null });
+      }
     });
 
     // Synchronize across browser tabs on the same origin (local testing & offline sync)
@@ -311,14 +333,27 @@ export const useExamStore = create<ExamState>((set, get) => ({
 
   setUrlExamCode: (code) => set({ urlExamCode: code }),
 
-  loginTeacher: () => {
-    setTeacherAuthenticated(true);
-    set({ isTeacherAuth: true, currentView: 'teacher' });
+  setTeacherUser: (user) => set({ teacherUser: user }),
+
+  loginTeacher: (user?: TeacherUser) => {
+    if (user && isAuthorizedTeacher(user.email)) {
+      setTeacherAuthenticated(true);
+      set({ 
+        isTeacherAuth: true, 
+        teacherUser: user,
+        currentView: 'teacher' 
+      });
+    }
   },
 
-  logoutTeacher: () => {
+  logoutTeacher: async () => {
     setTeacherAuthenticated(false);
-    set({ isTeacherAuth: false, currentView: 'student' });
+    try {
+      await logoutTeacherAuth();
+    } catch (e) {
+      console.warn('Firebase logout notice:', e);
+    }
+    set({ isTeacherAuth: false, teacherUser: null, currentView: 'student' });
   },
 
   startExam: (exam, details) => {

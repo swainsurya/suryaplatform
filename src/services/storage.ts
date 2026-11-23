@@ -3,13 +3,7 @@ import { Exam, ExamSubmission, ActiveExamSession, LiveCandidateSession } from '.
 const EXAMS_KEY = 'surya_exams_data';
 const SUBMISSIONS_KEY = 'surya_submissions_data';
 const TEACHER_AUTH_KEY = 'surya_teacher_session';
-const TEACHER_ATTEMPTS_KEY = 'surya_teacher_failed_attempts';
-const TEACHER_LOCKOUT_KEY = 'surya_teacher_lockout_until';
 const ACTIVE_EXAM_SESSION_KEY = 'surya_active_exam_session';
-
-export const TEACHER_SECRET_KEY = '7750960398';
-export const MAX_TEACHER_ATTEMPTS = 3;
-export const LOCKOUT_DURATION_MS = 5 * 60 * 1000; // 5 minutes lockout
 
 const INITIAL_EXAMS: Exam[] = [
   {
@@ -271,77 +265,9 @@ export function setTeacherAuthenticated(auth: boolean): void {
   }
 }
 
-/**
- * Check if the teacher login is currently locked due to too many failed attempts
- */
-export function getTeacherLockoutStatus(): { isLocked: boolean; remainingSeconds: number } {
-  const lockoutUntil = Number(localStorage.getItem(TEACHER_LOCKOUT_KEY) || '0');
-  const now = Date.now();
-  if (lockoutUntil > now) {
-    return {
-      isLocked: true,
-      remainingSeconds: Math.ceil((lockoutUntil - now) / 1000),
-    };
-  }
-  return { isLocked: false, remainingSeconds: 0 };
-}
-
-/**
- * Verify teacher key with brute-force defense
- */
-export function verifyTeacherKey(inputKey: string): {
-  success: boolean;
-  error?: string;
-  remainingAttempts?: number;
-  lockedSeconds?: number;
-} {
-  const status = getTeacherLockoutStatus();
-  if (status.isLocked) {
-    const mins = Math.ceil(status.remainingSeconds / 60);
-    return {
-      success: false,
-      error: `Teacher portal is locked due to repeated incorrect key attempts. Try again in ${mins} minute(s).`,
-      lockedSeconds: status.remainingSeconds,
-    };
-  }
-
-  const cleanKey = inputKey.trim();
-  if (cleanKey === TEACHER_SECRET_KEY) {
-    // Reset failed attempts upon successful authentication
-    localStorage.removeItem(TEACHER_ATTEMPTS_KEY);
-    localStorage.removeItem(TEACHER_LOCKOUT_KEY);
-    setTeacherAuthenticated(true);
-    return { success: true };
-  }
-
-  // Increment failed attempts
-  const attempts = Number(localStorage.getItem(TEACHER_ATTEMPTS_KEY) || '0') + 1;
-  localStorage.setItem(TEACHER_ATTEMPTS_KEY, String(attempts));
-
-  const remaining = MAX_TEACHER_ATTEMPTS - attempts;
-  if (remaining <= 0) {
-    const lockUntil = Date.now() + LOCKOUT_DURATION_MS;
-    localStorage.setItem(TEACHER_LOCKOUT_KEY, String(lockUntil));
-    localStorage.removeItem(TEACHER_ATTEMPTS_KEY);
-    return {
-      success: false,
-      error: 'Access denied. Maximum 3 failed attempts exceeded. Portal is locked for 5 minutes.',
-      lockedSeconds: Math.ceil(LOCKOUT_DURATION_MS / 1000),
-    };
-  }
-
-  return {
-    success: false,
-    error: `Invalid access key. You have ${remaining} attempt(s) remaining before lockout.`,
-    remainingAttempts: remaining,
-  };
-}
-
 export function resetToDemoData(): void {
   localStorage.setItem(EXAMS_KEY, JSON.stringify(INITIAL_EXAMS));
   localStorage.setItem(SUBMISSIONS_KEY, JSON.stringify(INITIAL_SUBMISSIONS));
-  localStorage.removeItem(TEACHER_ATTEMPTS_KEY);
-  localStorage.removeItem(TEACHER_LOCKOUT_KEY);
 }
 
 /**

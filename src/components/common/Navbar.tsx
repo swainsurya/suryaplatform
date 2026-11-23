@@ -16,6 +16,7 @@ export const Navbar: React.FC = () => {
     currentView,
     setCurrentView,
     isTeacherAuth,
+    teacherUser,
     logoutTeacher,
     resetDemoData,
     theme,
@@ -102,6 +103,17 @@ export const Navbar: React.FC = () => {
                   <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" title="Teacher Active" />
                 </button>
               </div>
+
+              {/* Teacher Identity Badge */}
+              {teacherUser && (
+                <div 
+                  className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-medium text-slate-700 dark:text-slate-300 max-w-[170px]"
+                  title={`Logged in as ${teacherUser.email || teacherUser.displayName} (${teacherUser.authProvider === 'firebase' ? 'Firebase Auth' : 'Key Auth'})`}
+                >
+                  <div className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
+                  <span className="truncate">{teacherUser.displayName || teacherUser.email?.split('@')[0]}</span>
+                </div>
+              )}
 
               {/* Logout button */}
               <button

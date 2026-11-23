@@ -46,7 +46,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
   onRefreshData,
   onStudentPortalPreview
 }) => {
-  const { saveExam, deleteExam, endExam, reopenExam, liveSessions } = useExamStore();
+  const { saveExam, deleteExam, endExam, reopenExam, liveSessions, teacherUser } = useExamStore();
 
   const [activeTab, setActiveTab] = useState<'exams' | 'submissions' | 'live' | 'editor'>('exams');
   const [editingExam, setEditingExam] = useState<Exam | null>(null);
@@ -147,6 +147,11 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
           <div className="inline-flex flex-wrap items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 backdrop-blur-xs text-indigo-300 text-xs font-semibold">
             <Sparkles className="w-3.5 h-3.5" />
             <span>Teacher Administration</span>
+            {teacherUser && (
+              <span className="text-[11px] text-indigo-200 bg-white/10 px-2 py-0.5 rounded-full border border-white/10 font-normal">
+                {teacherUser.displayName || teacherUser.email}
+              </span>
+            )}
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 ml-1.5 animate-pulse" />
             <span className="text-[10px] text-emerald-300 font-mono">Firebase DB</span>
             <span className="mx-1 text-white/30">•</span>

@@ -33,8 +33,8 @@ All state flows through a unified Zustand store ([`src/store/useExamStore.ts`](s
 ---
 
 ## 🔒 Security Model & Access Control
-- **Zero Key Leakage**: Master teacher access key (`7750960398`) is never exposed to students.
-- **Brute-Force Lockout Defense**: 3 consecutive wrong attempts triggers an automatic **5-minute security lockout**.
+- **Strict Google Single Sign-On (SSO)**: Teacher portal is restricted exclusively to the authorized instructor Google account: `swainsuryakanta97@gmail.com`.
+- **Zero Key Vulnerability**: Hardcoded master passcodes and static secret keys have been completely removed.
 - **Tamper-Proof Questions**: Students' active exam views are sanitized without `correctOptionIndex` or `explanation` to prevent browser inspect element cheating.
 
 ---
@@ -55,5 +55,7 @@ Drag & drop the `dist/` folder to [app.netlify.com/drop](https://app.netlify.com
 
 ---
 
-## 🔑 Credentials
-- **Teacher Access Key**: `7750960398`
+## 🔑 Teacher Authentication
+- **Authentication Method**: Firebase Google Authentication (**"Continue with Google"**)
+- **Authorized Instructor**: `swainsuryakanta97@gmail.com`
+- All other Google accounts or unauthenticated attempts are automatically blocked with immediate session revocation.
