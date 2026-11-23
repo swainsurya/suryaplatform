@@ -22,7 +22,7 @@ const INITIAL_EXAMS: Exam[] = [
     totalMarks: 5,
     passingPercentage: 50,
     negativeMarking: 0,
-    shuffleQuestions: false,
+    shuffleQuestions: true,
     enableAiProctoring: false,
     maxViolationsAllowed: 3,
     maxCandidates: 50,

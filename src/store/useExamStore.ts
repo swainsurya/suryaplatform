@@ -40,6 +40,7 @@ import {
   subscribeToLiveSessions,
   terminateLiveCandidateSession
 } from '../services/firebase';
+import { shuffleArray, cleanQuestionStatement } from '../services/examUtils';
 
 function mergeCandidateSessions(local: LiveCandidateSession[], remote: LiveCandidateSession[]): LiveCandidateSession[] {
   const map = new Map<string, LiveCandidateSession>();
@@ -380,13 +381,16 @@ export const useExamStore = create<ExamState>((set, get) => ({
     // Generate ordered sanitized questions ONCE so they never re-shuffle or change on refresh
     const sanitized = (exam.questions || []).map((q, idx) => ({
       id: q.id || `q-${idx}`,
-      questionText: q.questionText,
+      questionText: cleanQuestionStatement(q.questionText || ''),
       options: q.options || [],
       marks: q.marks || 1,
     }));
 
-    const orderedQuestions = exam.shuffleQuestions
-      ? [...sanitized].sort(() => Math.random() - 0.5)
+    // Randomize questions using unbiased Fisher-Yates shuffle.
+    // Default to true (always shuffle) unless teacher explicitly set shuffleQuestions to false.
+    const shouldShuffle = exam.shuffleQuestions !== false;
+    const orderedQuestions = shouldShuffle
+      ? shuffleArray(sanitized)
       : sanitized;
 
     const sessionId = `live-${exam.id}-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
@@ -754,7 +758,7 @@ export const useExamStore = create<ExamState>((set, get) => ({
       totalMarks: targetSub.maxScore,
       passingPercentage: 40,
       negativeMarking: 0,
-      shuffleQuestions: false,
+      shuffleQuestions: true,
       createdAt: '',
       isActive: false,
       questions: [],

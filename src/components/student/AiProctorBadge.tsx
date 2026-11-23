@@ -3,7 +3,9 @@ import {
   VideoOff, 
   Eye, 
   Users, 
-  AlertTriangle 
+  AlertTriangle,
+  GripHorizontal,
+  RotateCcw
 } from 'lucide-react';
 import { 
   FaceProctorController, 
@@ -40,6 +42,140 @@ export const AiProctorBadge: React.FC<AiProctorBadgeProps> = ({
     statusMessage: 'Starting AI Camera...',
     statusType: 'normal',
   });
+
+  // Movable badge state
+  const badgeRef = useRef<HTMLDivElement>(null);
+  const dragOffsetRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const dragCleanupRef = useRef<(() => void) | null>(null);
+
+  const [position, setPosition] = useState<{ x: number; y: number } | null>(() => {
+    if (typeof window === 'undefined') return null;
+    try {
+      const saved = localStorage.getItem('surya_ai_proctor_pos');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (typeof parsed?.x === 'number' && typeof parsed?.y === 'number') {
+          const maxX = Math.max(8, window.innerWidth - 240);
+          const maxY = Math.max(8, window.innerHeight - 200);
+          return {
+            x: Math.max(8, Math.min(parsed.x, maxX)),
+            y: Math.max(8, Math.min(parsed.y, maxY)),
+          };
+        }
+      }
+    } catch {}
+    return null;
+  });
+  const [isDragging, setIsDragging] = useState<boolean>(false);
+
+  // Keep badge within screen on viewport resize
+  useEffect(() => {
+    const handleResize = () => {
+      setPosition((prev) => {
+        if (!prev) return null;
+        const width = badgeRef.current?.offsetWidth || 240;
+        const height = badgeRef.current?.offsetHeight || 200;
+        const maxX = Math.max(8, window.innerWidth - width - 8);
+        const maxY = Math.max(8, window.innerHeight - height - 8);
+        const clamped = {
+          x: Math.max(8, Math.min(prev.x, maxX)),
+          y: Math.max(8, Math.min(prev.y, maxY)),
+        };
+        try {
+          localStorage.setItem('surya_ai_proctor_pos', JSON.stringify(clamped));
+        } catch {}
+        return clamped;
+      });
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      if (dragCleanupRef.current) {
+        dragCleanupRef.current();
+      }
+    };
+  }, []);
+
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    // Only primary button or touch
+    if (e.button !== 0 && e.pointerType === 'mouse') return;
+    // Don't drag if interactive button or input was clicked
+    if ((e.target as HTMLElement).closest('button, a, input, select, textarea')) {
+      return;
+    }
+
+    if (!badgeRef.current) return;
+    const rect = badgeRef.current.getBoundingClientRect();
+
+    dragOffsetRef.current = {
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top,
+    };
+
+    // If initial position was null, set it to current rendered rect so inline styles take over smoothly
+    if (!position) {
+      setPosition({ x: rect.left, y: rect.top });
+    }
+    setIsDragging(true);
+
+    const handlePointerMove = (moveEvent: PointerEvent) => {
+      if (!badgeRef.current) return;
+      const badgeWidth = badgeRef.current.offsetWidth || rect.width;
+      const badgeHeight = badgeRef.current.offsetHeight || rect.height;
+
+      const minX = 8;
+      const maxX = Math.max(8, window.innerWidth - badgeWidth - 8);
+      const minY = 8;
+      const maxY = Math.max(8, window.innerHeight - badgeHeight - 8);
+
+      const rawX = moveEvent.clientX - dragOffsetRef.current.x;
+      const rawY = moveEvent.clientY - dragOffsetRef.current.y;
+
+      const clampedX = Math.max(minX, Math.min(rawX, maxX));
+      const clampedY = Math.max(minY, Math.min(rawY, maxY));
+
+      setPosition({ x: clampedX, y: clampedY });
+    };
+
+    const handlePointerUp = (upEvent: PointerEvent) => {
+      if (dragCleanupRef.current) {
+        dragCleanupRef.current();
+      }
+      if (badgeRef.current) {
+        const badgeWidth = badgeRef.current.offsetWidth || rect.width;
+        const badgeHeight = badgeRef.current.offsetHeight || rect.height;
+        const maxX = Math.max(8, window.innerWidth - badgeWidth - 8);
+        const maxY = Math.max(8, window.innerHeight - badgeHeight - 8);
+        const finalX = Math.max(8, Math.min(upEvent.clientX - dragOffsetRef.current.x, maxX));
+        const finalY = Math.max(8, Math.min(upEvent.clientY - dragOffsetRef.current.y, maxY));
+        try {
+          localStorage.setItem('surya_ai_proctor_pos', JSON.stringify({ x: finalX, y: finalY }));
+        } catch {}
+      }
+    };
+
+    const cleanup = () => {
+      setIsDragging(false);
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
+      window.removeEventListener('pointercancel', handlePointerUp);
+      dragCleanupRef.current = null;
+    };
+
+    dragCleanupRef.current = cleanup;
+    window.addEventListener('pointermove', handlePointerMove, { passive: true });
+    window.addEventListener('pointerup', handlePointerUp);
+    window.addEventListener('pointercancel', handlePointerUp);
+  };
+
+  const handleResetPosition = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setPosition(null);
+    try {
+      localStorage.removeItem('surya_ai_proctor_pos');
+    } catch {}
+  };
 
   const handleStatusChange = useCallback((newStatus: FaceDetectionStatus) => {
     setStatus(newStatus);
@@ -106,30 +242,67 @@ export const AiProctorBadge: React.FC<AiProctorBadgeProps> = ({
   const violationsRemaining = Math.max(0, maxViolationsAllowed - totalViolations);
 
   return (
-    <div className="fixed bottom-16 sm:bottom-6 right-3 sm:right-6 z-40 transition-all duration-300 w-48 sm:w-60">
+    <div
+      ref={badgeRef}
+      onPointerDown={handlePointerDown}
+      style={
+        position
+          ? {
+              left: `${position.x}px`,
+              top: `${position.y}px`,
+              bottom: 'auto',
+              right: 'auto',
+            }
+          : undefined
+      }
+      className={`fixed ${
+        position ? '' : 'bottom-16 sm:bottom-6 right-3 sm:right-6'
+      } z-40 w-48 sm:w-60 select-none touch-none ${
+        isDragging
+          ? 'cursor-grabbing transition-none scale-[1.02]'
+          : 'cursor-grab transition-shadow duration-200'
+      }`}
+    >
       <div className={`rounded-2xl overflow-hidden shadow-2xl border transition-all ${
+        isDragging ? 'ring-2 ring-indigo-400 shadow-indigo-500/30' : ''
+      } ${
         status.statusType === 'violation' || totalViolations >= maxViolationsAllowed
           ? 'border-red-500 bg-red-950/90 shadow-red-500/20'
           : status.statusType === 'warning'
           ? 'border-amber-500 bg-amber-950/80 shadow-amber-500/20'
           : 'border-indigo-500/50 dark:border-indigo-400/30 bg-slate-900/90 backdrop-blur-md'
       }`}>
-        {/* Header Bar */}
-        <div className="flex items-center justify-between px-2.5 py-1.5 bg-slate-950/80 border-b border-slate-800 text-white text-[11px]">
-          <div className="flex items-center gap-1.5">
-            <span className={`w-2 h-2 rounded-full animate-pulse ${
+        {/* Header Bar - Drag Handle */}
+        <div
+          onDoubleClick={handleResetPosition}
+          className="flex items-center justify-between px-2.5 py-1.5 bg-slate-950/80 border-b border-slate-800 text-white text-[11px] select-none"
+          title="Click & drag to move • Double-click to reset position"
+        >
+          <div className="flex items-center gap-1.5 min-w-0">
+            <GripHorizontal className="w-3.5 h-3.5 text-slate-400 shrink-0 opacity-70 group-hover:opacity-100" />
+            <span className={`w-2 h-2 shrink-0 rounded-full animate-pulse ${
               status.statusType === 'violation' ? 'bg-red-500' :
               status.statusType === 'warning' ? 'bg-amber-400' : 'bg-emerald-400'
             }`} />
-            <span className="font-semibold tracking-wide">AI Proctor</span>
+            <span className="font-semibold tracking-wide truncate">AI Proctor</span>
           </div>
 
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1.5 shrink-0">
             <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
               totalViolations > 0 ? 'bg-red-500/30 text-red-300' : 'bg-emerald-500/20 text-emerald-300'
             }`}>
-              {totalViolations}/{maxViolationsAllowed} Violations
+              {totalViolations}/{maxViolationsAllowed} <span className="hidden sm:inline">Violations</span>
             </span>
+            {position && (
+              <button
+                type="button"
+                onClick={handleResetPosition}
+                title="Reset badge position"
+                className="p-0.5 rounded hover:bg-slate-800 text-slate-400 hover:text-white transition-colors cursor-pointer"
+              >
+                <RotateCcw className="w-2.5 h-2.5" />
+              </button>
+            )}
           </div>
         </div>
 

@@ -99,3 +99,25 @@ export function getExamScheduleInfo(exam: Exam): ExamScheduleInfo {
     endTimeFormatted: exam.endTime ? formatExamDateTime(exam.endTime) : undefined,
   };
 }
+
+/**
+ * Fisher-Yates (Knuth) Shuffle algorithm.
+ * Guarantees a truly uniform, unbiased random permutation of elements.
+ */
+export function shuffleArray<T>(items: T[]): T[] {
+  const arr = [...items];
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+/**
+ * Strips any hardcoded question prefixes (e.g. "1. ", "Q1: ", "Question 2 - ")
+ * so questions cleanly display their new dynamic numbering during an exam.
+ */
+export function cleanQuestionStatement(text: string): string {
+  if (!text) return '';
+  return text.replace(/^(?:Q(?:uestion)?\s*\d+\s*[:.)-]?|\d+\s*[:.)-])\s*/i, '').trim();
+}

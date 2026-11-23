@@ -32,6 +32,7 @@ import { AiProctorBadge } from './AiProctorBadge';
 import { AntiLeakWatermark } from './AntiLeakWatermark';
 import { playGazeWarningChime, playViolationBeep } from '../../services/proctorAudioAlert';
 import { isMobileDevice } from '../../services/deviceUtils';
+import { shuffleArray, cleanQuestionStatement } from '../../services/examUtils';
 
 interface ExamScreenProps {
   exam: Exam;
@@ -71,21 +72,21 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
 
   // Active question list restored from session so questions & order NEVER change on refresh
   const [orderedQuestions] = useState<SanitizedQuestion[]>(() => {
-    if (activeTestSession?.orderedQuestions && activeTestSession.orderedQuestions.length > 0) {
+    if (activeTestSession?.orderedQuestions && activeTestSession.orderedQuestions.length > 0 && activeTestSession.exam?.id === exam.id) {
       return activeTestSession.orderedQuestions;
     }
 
     const sanitized = (exam.questions || []).map((q, idx) => ({
       id: q.id || `q-${idx}`,
-      questionText: q.questionText,
+      questionText: cleanQuestionStatement(q.questionText || ''),
       options: q.options || [],
       marks: q.marks || 1
     }));
 
-    if (exam.shuffleQuestions) {
-      return [...sanitized].sort(() => Math.random() - 0.5);
-    }
-    return sanitized;
+    // Randomize questions using unbiased Fisher-Yates shuffle.
+    // Default to true (always shuffle) unless teacher explicitly set shuffleQuestions to false.
+    const shouldShuffle = exam.shuffleQuestions !== false;
+    return shouldShuffle ? shuffleArray(sanitized) : sanitized;
   });
 
   // Total duration in seconds decided by teacher

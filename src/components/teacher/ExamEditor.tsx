@@ -64,7 +64,7 @@ export const ExamEditor: React.FC<ExamEditorProps> = ({
     initialExam?.negativeMarking || 0
   );
   const [shuffleQuestions, setShuffleQuestions] = useState<boolean>(
-    initialExam?.shuffleQuestions ?? false
+    initialExam?.shuffleQuestions ?? true
   );
   const [enableAiProctoring, setEnableAiProctoring] = useState<boolean>(
     initialExam ? Boolean(initialExam.enableAiProctoring) : false
