@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { Exam, ExamSubmission, QuestionAnswer, ActiveExamSession, ProctoringViolation } from '../types/exam';
+import { Exam, ExamSubmission, QuestionAnswer, ActiveExamSession, ProctoringViolation, LiveCandidateSession } from '../types/exam';
 import { 
   getExams, 
   saveExam as saveExamToLocal, 
@@ -13,7 +13,13 @@ import {
   initStorage,
   saveActiveExamSession,
   getActiveExamSession,
-  clearActiveExamSession
+  clearActiveExamSession,
+  isExamAttemptedOnDevice,
+  recordExamAttemptOnDevice,
+  getLiveSessionsFromLocal,
+  saveLiveSessionToLocal,
+  updateLiveSessionInLocal,
+  deleteLiveSessionFromLocal
 } from '../services/storage';
 import { 
   getFirebaseDb, 
@@ -26,12 +32,18 @@ import {
   saveSubmissionToFirebase,
   deleteSubmissionFromFirebase,
   subscribeToExams,
-  subscribeToSubmissions
+  subscribeToSubmissions,
+  saveLiveSessionToFirebase,
+  deleteLiveSessionFromFirebase,
+  subscribeToLiveSessions,
+  terminateLiveCandidateSession
 } from '../services/firebase';
 
 interface ExamState {
   exams: Exam[];
   submissions: ExamSubmission[];
+  liveSessions: LiveCandidateSession[];
+  activeLiveSessionId: string | null;
   currentView: 'student' | 'teacher';
   isTeacherAuth: boolean;
   activeTestSession: ActiveExamSession | null;
@@ -53,6 +65,9 @@ interface ExamState {
   logoutTeacher: () => void;
   startExam: (exam: Exam, studentDetails: { name: string; rollNumber?: string; email?: string }) => void;
   updateExamProgress: (updates: { userAnswers?: Record<string, number | null>; markedForReview?: string[]; currentIndex?: number }) => void;
+  sendLiveHeartbeat: (updates: Partial<LiveCandidateSession>) => Promise<void>;
+  terminateLiveCandidateByTeacher: (sessionId: string) => Promise<void>;
+  cleanUpLiveSession: (sessionId?: string) => Promise<void>;
   finishExam: (
     userAnswers: Record<string, number | null>, 
     timeSpentSeconds: number, 
@@ -71,11 +86,14 @@ interface ExamState {
   deleteSubmission: (id: string) => Promise<void>;
   resetDemoData: () => Promise<void>;
   findExamByCode: (code: string) => Promise<Exam | null>;
+  viewSubmissionScorecard: (submissionId: string) => boolean;
 }
 
 export const useExamStore = create<ExamState>((set, get) => ({
   exams: [],
   submissions: [],
+  liveSessions: [],
+  activeLiveSessionId: null,
   currentView: 'student',
   isTeacherAuth: false,
   activeTestSession: null,
@@ -102,6 +120,7 @@ export const useExamStore = create<ExamState>((set, get) => ({
     const isAuth = isTeacherAuthenticated();
     const localExams = getExams();
     const localSubs = getSubmissions();
+    const localLive = getLiveSessionsFromLocal();
 
     // Check if an ongoing active exam session was preserved across browser refresh
     const savedSession = getActiveExamSession();
@@ -113,12 +132,18 @@ export const useExamStore = create<ExamState>((set, get) => ({
       } else {
         // Exam time expired while away: clear expired session
         clearActiveExamSession();
+        if (savedSession.sessionId) {
+          deleteLiveSessionFromLocal(savedSession.sessionId);
+          deleteLiveSessionFromFirebase(savedSession.sessionId);
+        }
       }
     }
 
     set({
       exams: localExams,
       submissions: localSubs,
+      liveSessions: localLive,
+      activeLiveSessionId: restoredSession?.sessionId || null,
       isTeacherAuth: isAuth,
       activeTestSession: restoredSession,
       currentView: restoredSession ? 'student' : (isAuth ? 'teacher' : 'student'),
@@ -134,6 +159,9 @@ export const useExamStore = create<ExamState>((set, get) => ({
         } else if (e.key === 'surya_submissions_data') {
           const updatedSubs = getSubmissions();
           set({ submissions: updatedSubs });
+        } else if (e.key === 'surya_live_sessions_data') {
+          const updatedLive = getLiveSessionsFromLocal();
+          set({ liveSessions: updatedLive });
         }
       });
     }
@@ -168,6 +196,12 @@ export const useExamStore = create<ExamState>((set, get) => ({
       subscribeToSubmissions((updatedSubs) => {
         if (updatedSubs) {
           set({ submissions: updatedSubs });
+        }
+      });
+
+      subscribeToLiveSessions((remoteLiveSessions) => {
+        if (remoteLiveSessions) {
+          set({ liveSessions: remoteLiveSessions });
         }
       });
     }
@@ -250,9 +284,61 @@ export const useExamStore = create<ExamState>((set, get) => ({
   },
 
   startExam: (exam, details) => {
+    // Schedule check: ensure start time has arrived
+    if (exam.startTime) {
+      const startTimeMs = new Date(exam.startTime).getTime();
+      if (!isNaN(startTimeMs) && Date.now() < startTimeMs) {
+        console.warn('Exam cannot be started before scheduled start time');
+        return;
+      }
+    }
+
+    // Schedule check: ensure end time has not passed
+    if (exam.endTime) {
+      const endTimeMs = new Date(exam.endTime).getTime();
+      if (!isNaN(endTimeMs) && Date.now() > endTimeMs) {
+        console.warn('Exam cannot be started after scheduled end time');
+        return;
+      }
+    }
+
+    // Sheet capacity check: ensure available sheets remain
+    const existingSubs = get().submissions.filter(s => s.examId === exam.id);
+    const currentAttempts = Math.max(Number(exam.attemptedCount) || 0, existingSubs.length);
+    if (exam.maxCandidates !== undefined && exam.maxCandidates !== null && Number(exam.maxCandidates) > 0) {
+      if (currentAttempts >= Number(exam.maxCandidates)) {
+        console.warn('No more sheets are available for this exam');
+        return;
+      }
+    }
+
+    // Single-attempt check: ensure candidate has not already taken this test on this device
+    if (exam.singleAttemptOnly !== false) {
+      if (isExamAttemptedOnDevice(exam.id, exam.code)) {
+        console.warn('Candidate has already attempted this exam on this device');
+        return;
+      }
+    }
+
+    // Increment candidate attempted count to reserve an exam sheet
+    const updatedExam: Exam = {
+      ...exam,
+      attemptedCount: currentAttempts + 1
+    };
+    saveExamToLocal(updatedExam);
+    saveExamToFirebase(updatedExam);
+
     const durationMins = Math.max(1, Number(exam.durationMinutes) || 15);
     const examStartTime = Date.now();
-    const examEndTime = examStartTime + durationMins * 60 * 1000;
+    let examEndTime = examStartTime + durationMins * 60 * 1000;
+    
+    // If exam has a scheduled end time that ends earlier than duration, cap it at scheduled end time
+    if (exam.endTime) {
+      const scheduledEnd = new Date(exam.endTime).getTime();
+      if (!isNaN(scheduledEnd) && scheduledEnd < examEndTime) {
+        examEndTime = Math.max(examStartTime, scheduledEnd);
+      }
+    }
 
     // Generate ordered sanitized questions ONCE so they never re-shuffle or change on refresh
     const sanitized = (exam.questions || []).map((q, idx) => ({
@@ -266,8 +352,11 @@ export const useExamStore = create<ExamState>((set, get) => ({
       ? [...sanitized].sort(() => Math.random() - 0.5)
       : sanitized;
 
+    const sessionId = `live-${exam.id}-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+
     const session: ActiveExamSession = {
-      exam,
+      sessionId,
+      exam: updatedExam,
       studentName: details.name.trim(),
       studentRollNumber: details.rollNumber?.trim(),
       studentEmail: details.email?.trim(),
@@ -281,11 +370,37 @@ export const useExamStore = create<ExamState>((set, get) => ({
 
     saveActiveExamSession(session);
 
-    set({
+    // Create live candidate session for real-time teacher attending view
+    const initialLiveSession: LiveCandidateSession = {
+      sessionId,
+      examId: updatedExam.id,
+      examCode: updatedExam.code,
+      examTitle: updatedExam.title,
+      studentName: details.name.trim(),
+      studentRollNumber: details.rollNumber?.trim(),
+      studentEmail: details.email?.trim(),
+      startedAt: new Date(examStartTime).toISOString(),
+      lastHeartbeat: Date.now(),
+      status: 'ONLINE',
+      timeRemainingSeconds: durationMins * 60,
+      totalQuestions: orderedQuestions.length,
+      answeredCount: 0,
+      markedForReviewCount: 0,
+      currentIndex: 0,
+      violationsCount: 0,
+      isTerminatedByTeacher: false,
+    };
+    saveLiveSessionToLocal(initialLiveSession);
+    saveLiveSessionToFirebase(initialLiveSession);
+
+    set((state) => ({
+      exams: state.exams.map(e => e.id === exam.id ? updatedExam : e),
       activeScorecard: null,
       activeTestSession: session,
+      activeLiveSessionId: sessionId,
+      liveSessions: [initialLiveSession, ...state.liveSessions.filter(s => s.sessionId !== sessionId)],
       currentView: 'student',
-    });
+    }));
   },
 
   updateExamProgress: (updates) => {
@@ -302,6 +417,72 @@ export const useExamStore = create<ExamState>((set, get) => ({
     set({ activeTestSession: updated });
   },
 
+  sendLiveHeartbeat: async (updates) => {
+    const { activeLiveSessionId, activeTestSession, liveSessions } = get();
+    const sessionId = activeLiveSessionId || activeTestSession?.sessionId;
+    if (!sessionId) return;
+
+    const now = Date.now();
+    const existing = liveSessions.find(s => s.sessionId === sessionId);
+
+    const updatedSession: LiveCandidateSession = existing ? {
+      ...existing,
+      ...updates,
+      lastHeartbeat: now,
+    } : {
+      sessionId,
+      examId: activeTestSession?.exam.id || '',
+      examCode: activeTestSession?.exam.code || '',
+      examTitle: activeTestSession?.exam.title || '',
+      studentName: activeTestSession?.studentName || '',
+      studentRollNumber: activeTestSession?.studentRollNumber,
+      studentEmail: activeTestSession?.studentEmail,
+      startedAt: activeTestSession ? new Date(activeTestSession.examStartTime).toISOString() : new Date().toISOString(),
+      lastHeartbeat: now,
+      status: updates.status || 'ONLINE',
+      timeRemainingSeconds: updates.timeRemainingSeconds ?? 0,
+      totalQuestions: updates.totalQuestions ?? activeTestSession?.orderedQuestions.length ?? 0,
+      answeredCount: updates.answeredCount ?? 0,
+      markedForReviewCount: updates.markedForReviewCount ?? 0,
+      currentIndex: updates.currentIndex ?? 0,
+      violationsCount: updates.violationsCount ?? 0,
+      lastViolationMessage: updates.lastViolationMessage,
+      isTerminatedByTeacher: false,
+    };
+
+    saveLiveSessionToLocal(updatedSession);
+    await saveLiveSessionToFirebase(updatedSession);
+
+    set((state) => ({
+      liveSessions: state.liveSessions.some(s => s.sessionId === sessionId)
+        ? state.liveSessions.map(s => s.sessionId === sessionId ? updatedSession : s)
+        : [updatedSession, ...state.liveSessions]
+    }));
+  },
+
+  terminateLiveCandidateByTeacher: async (sessionId: string) => {
+    await terminateLiveCandidateSession(sessionId);
+    const current = get().liveSessions.find(s => s.sessionId === sessionId);
+    if (current) {
+      const updated: LiveCandidateSession = { ...current, isTerminatedByTeacher: true, status: 'DISCONNECTED' };
+      updateLiveSessionInLocal(sessionId, updated);
+      set((state) => ({
+        liveSessions: state.liveSessions.map(s => s.sessionId === sessionId ? updated : s)
+      }));
+    }
+  },
+
+  cleanUpLiveSession: async (targetSessionId?: string) => {
+    const sessionId = targetSessionId || get().activeLiveSessionId || get().activeTestSession?.sessionId;
+    if (!sessionId) return;
+    deleteLiveSessionFromLocal(sessionId);
+    await deleteLiveSessionFromFirebase(sessionId);
+    set((state) => ({
+      activeLiveSessionId: state.activeLiveSessionId === sessionId ? null : state.activeLiveSessionId,
+      liveSessions: state.liveSessions.filter(s => s.sessionId !== sessionId)
+    }));
+  },
+
   finishExam: async (userAnswers, timeSpentSeconds, isEndedByTeacher = false, proctoringData) => {
     const { activeTestSession } = get();
     if (!activeTestSession) return;
@@ -309,6 +490,13 @@ export const useExamStore = create<ExamState>((set, get) => ({
 
     // Clear active session immediately so refresh now stays on scorecard
     clearActiveExamSession();
+
+    // Clean up active live attendance session
+    const currentSessionId = get().activeLiveSessionId || activeTestSession.sessionId;
+    if (currentSessionId) {
+      deleteLiveSessionFromLocal(currentSessionId);
+      deleteLiveSessionFromFirebase(currentSessionId);
+    }
 
     let totalScore = 0;
     let correctCount = 0;
@@ -381,9 +569,19 @@ export const useExamStore = create<ExamState>((set, get) => ({
     // Save to Firebase Cloud Firestore automatically
     await saveSubmissionToFirebase(submission);
 
+    // Record device-level single attempt lock
+    recordExamAttemptOnDevice(
+      completedExam.id,
+      submission.id,
+      completedExam.code,
+      activeTestSession.studentName
+    );
+
     set((state) => ({
       submissions: [submission, ...state.submissions.filter(s => s.id !== submission.id)],
       activeTestSession: null,
+      activeLiveSessionId: null,
+      liveSessions: currentSessionId ? state.liveSessions.filter(s => s.sessionId !== currentSessionId) : state.liveSessions,
       activeScorecard: {
         submission,
         exam: completedExam,
@@ -392,12 +590,19 @@ export const useExamStore = create<ExamState>((set, get) => ({
   },
 
   exitToHome: () => {
+    const currentSessionId = get().activeLiveSessionId || get().activeTestSession?.sessionId;
+    if (currentSessionId) {
+      deleteLiveSessionFromLocal(currentSessionId);
+      deleteLiveSessionFromFirebase(currentSessionId);
+    }
     clearActiveExamSession();
-    set({
+    set((state) => ({
       activeScorecard: null,
       activeTestSession: null,
+      activeLiveSessionId: null,
+      liveSessions: currentSessionId ? state.liveSessions.filter(s => s.sessionId !== currentSessionId) : state.liveSessions,
       urlExamCode: ''
-    });
+    }));
   },
 
   saveExam: async (exam: Exam) => {
@@ -486,5 +691,33 @@ export const useExamStore = create<ExamState>((set, get) => ({
       activeTestSession: null,
       activeScorecard: null
     });
+  },
+
+  viewSubmissionScorecard: (submissionId: string) => {
+    const targetSub = get().submissions.find(s => s.id === submissionId);
+    if (!targetSub) return false;
+    const targetExam = get().exams.find(e => e.id === targetSub.examId) || {
+      id: targetSub.examId,
+      code: targetSub.examCode,
+      title: targetSub.examTitle,
+      description: '',
+      subject: '',
+      durationMinutes: 15,
+      totalMarks: targetSub.maxScore,
+      passingPercentage: 40,
+      negativeMarking: 0,
+      shuffleQuestions: false,
+      createdAt: '',
+      isActive: false,
+      questions: [],
+    };
+    set({
+      activeScorecard: {
+        submission: targetSub,
+        exam: targetExam,
+      },
+      currentView: 'student',
+    });
+    return true;
   }
 }));

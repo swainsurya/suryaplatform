@@ -1,4 +1,4 @@
-import { Exam, ExamSubmission, ActiveExamSession } from '../types/exam';
+import { Exam, ExamSubmission, ActiveExamSession, LiveCandidateSession } from '../types/exam';
 
 const EXAMS_KEY = 'surya_exams_data';
 const SUBMISSIONS_KEY = 'surya_submissions_data';
@@ -25,6 +25,9 @@ const INITIAL_EXAMS: Exam[] = [
     shuffleQuestions: false,
     enableAiProctoring: false,
     maxViolationsAllowed: 3,
+    maxCandidates: 50,
+    attemptedCount: 1,
+    singleAttemptOnly: true,
     createdAt: new Date(Date.now() - 86400000 * 2).toISOString(),
     isActive: true,
     questions: [
@@ -379,3 +382,155 @@ export function clearActiveExamSession(): void {
     console.warn('Could not clear active exam session:', err);
   }
 }
+
+const DEVICE_ATTEMPTS_KEY = 'surya_device_attempted_exams';
+
+export interface DeviceExamAttemptRecord {
+  submissionId: string;
+  submittedAt: string;
+  examCode?: string;
+  studentName?: string;
+}
+
+/**
+ * Checks if this exam has already been submitted on this browser/device
+ */
+export function isExamAttemptedOnDevice(examId: string, examCode?: string): boolean {
+  try {
+    const raw = localStorage.getItem(DEVICE_ATTEMPTS_KEY);
+    if (!raw) return false;
+    const records = JSON.parse(raw) as Record<string, DeviceExamAttemptRecord>;
+    if (records[examId]) return true;
+    if (examCode && records[examCode.toUpperCase()]) return true;
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Retrieves the device attempt record for an exam
+ */
+export function getDeviceExamAttempt(examId: string, examCode?: string): DeviceExamAttemptRecord | null {
+  try {
+    const raw = localStorage.getItem(DEVICE_ATTEMPTS_KEY);
+    if (!raw) return null;
+    const records = JSON.parse(raw) as Record<string, DeviceExamAttemptRecord>;
+    return records[examId] || (examCode ? records[examCode.toUpperCase()] : null) || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Records that an exam has been attempted and submitted on this device
+ */
+export function recordExamAttemptOnDevice(
+  examId: string,
+  submissionId: string,
+  examCode?: string,
+  studentName?: string
+): void {
+  try {
+    const raw = localStorage.getItem(DEVICE_ATTEMPTS_KEY);
+    const records: Record<string, DeviceExamAttemptRecord> = raw ? JSON.parse(raw) : {};
+    const entry: DeviceExamAttemptRecord = {
+      submissionId,
+      submittedAt: new Date().toISOString(),
+      examCode: examCode?.toUpperCase(),
+      studentName,
+    };
+    records[examId] = entry;
+    if (examCode) {
+      records[examCode.toUpperCase()] = entry;
+    }
+    localStorage.setItem(DEVICE_ATTEMPTS_KEY, JSON.stringify(records));
+  } catch (err) {
+    console.warn('Could not record exam attempt on device:', err);
+  }
+}
+
+/**
+ * Clear device attempt record for an exam
+ */
+export function clearDeviceExamAttempt(examId: string, examCode?: string): void {
+  try {
+    const raw = localStorage.getItem(DEVICE_ATTEMPTS_KEY);
+    if (!raw) return;
+    const records = JSON.parse(raw) as Record<string, DeviceExamAttemptRecord>;
+    delete records[examId];
+    if (examCode) {
+      delete records[examCode.toUpperCase()];
+    }
+    localStorage.setItem(DEVICE_ATTEMPTS_KEY, JSON.stringify(records));
+  } catch {
+    // ignore
+  }
+}
+
+const LIVE_SESSIONS_KEY = 'surya_live_attending_sessions';
+
+/**
+ * Retrieve all currently active live candidate sessions stored locally
+ */
+export function getLiveSessionsFromLocal(): LiveCandidateSession[] {
+  try {
+    const raw = localStorage.getItem(LIVE_SESSIONS_KEY);
+    if (!raw) return [];
+    const sessions = JSON.parse(raw) as LiveCandidateSession[];
+    return Array.isArray(sessions) ? sessions : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Save or update a live candidate session in local storage
+ */
+export function saveLiveSessionToLocal(session: LiveCandidateSession): void {
+  try {
+    const current = getLiveSessionsFromLocal();
+    const idx = current.findIndex((s) => s.sessionId === session.sessionId);
+    if (idx >= 0) {
+      current[idx] = { ...current[idx], ...session };
+    } else {
+      current.unshift(session);
+    }
+    localStorage.setItem(LIVE_SESSIONS_KEY, JSON.stringify(current));
+  } catch (err) {
+    console.warn('Could not save live session to local storage:', err);
+  }
+}
+
+/**
+ * Update partial fields in a live candidate session
+ */
+export function updateLiveSessionInLocal(
+  sessionId: string,
+  updates: Partial<LiveCandidateSession>
+): void {
+  try {
+    const current = getLiveSessionsFromLocal();
+    const idx = current.findIndex((s) => s.sessionId === sessionId);
+    if (idx >= 0) {
+      current[idx] = { ...current[idx], ...updates };
+      localStorage.setItem(LIVE_SESSIONS_KEY, JSON.stringify(current));
+    }
+  } catch {
+    // ignore
+  }
+}
+
+/**
+ * Remove a completed or terminated live candidate session from local storage
+ */
+export function deleteLiveSessionFromLocal(sessionId: string): void {
+  try {
+    const current = getLiveSessionsFromLocal().filter((s) => s.sessionId !== sessionId);
+    localStorage.setItem(LIVE_SESSIONS_KEY, JSON.stringify(current));
+  } catch {
+    // ignore
+  }
+}
+
+

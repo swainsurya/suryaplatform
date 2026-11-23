@@ -20,10 +20,16 @@ import {
   Edit2,
   Camera,
   VideoOff,
-  RefreshCw
+  RefreshCw,
+  Calendar,
+  Users,
+  Lock
 } from 'lucide-react';
 import { Exam } from '../../types/exam';
 import { isMobileDevice } from '../../services/deviceUtils';
+import { useExamStore } from '../../store/useExamStore';
+import { getExamAttemptInfo, getExamScheduleInfo } from '../../services/examUtils';
+import { isExamAttemptedOnDevice, getDeviceExamAttempt } from '../../services/storage';
 
 interface WelcomeInstructionScreenProps {
   exam: Exam;
@@ -42,6 +48,12 @@ export const WelcomeInstructionScreen: React.FC<WelcomeInstructionScreenProps> =
   onProceedToExam,
   onCancel,
 }) => {
+  const { submissions, viewSubmissionScorecard } = useExamStore();
+  const schedule = getExamScheduleInfo(exam);
+  const attempts = getExamAttemptInfo(exam, submissions);
+  const isAlreadyAttempted = exam.singleAttemptOnly !== false && isExamAttemptedOnDevice(exam.id, exam.code);
+  const pastAttempt = isAlreadyAttempted ? getDeviceExamAttempt(exam.id, exam.code) : null;
+
   const [name, setName] = useState<string>(candidateDetails.name || '');
   const [roll, setRoll] = useState<string>(candidateDetails.rollNumber || '');
   const [email, setEmail] = useState<string>(candidateDetails.email || '');
@@ -114,6 +126,26 @@ export const WelcomeInstructionScreen: React.FC<WelcomeInstructionScreenProps> =
       return;
     }
 
+    if (schedule.isUpcoming) {
+      setNameError(`Exam has not started yet. Scheduled to begin at ${schedule.startTimeFormatted}.`);
+      return;
+    }
+
+    if (schedule.isExpired) {
+      setNameError(`Exam has ended. The scheduled testing window closed at ${schedule.endTimeFormatted}.`);
+      return;
+    }
+
+    if (attempts.isFull) {
+      setNameError('No more sheets are available for this exam.');
+      return;
+    }
+
+    if (isAlreadyAttempted) {
+      setNameError('You have already attempted this exam on this device. Retakes are not allowed.');
+      return;
+    }
+
     if (isProctored && cameraStatus !== 'granted') {
       await requestCameraPermission();
       return;
@@ -172,6 +204,74 @@ export const WelcomeInstructionScreen: React.FC<WelcomeInstructionScreenProps> =
           </span>
         </div>
       </div>
+
+      {/* Critical Status Alerts: Schedule & Available Sheets */}
+      {isAlreadyAttempted && (
+        <div className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/50 border border-amber-300 dark:border-amber-800 text-amber-900 dark:text-amber-200 text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-fadeIn">
+          <div className="flex items-start gap-3">
+            <Lock className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+            <div className="space-y-0.5">
+              <p className="font-extrabold text-sm text-amber-700 dark:text-amber-300">
+                Exam Already Completed on this Device
+              </p>
+              <p className="text-xs leading-relaxed text-amber-600 dark:text-amber-400">
+                This assessment is set to <strong>1 attempt only</strong> per candidate device. An attempt has already been submitted{pastAttempt?.submittedAt ? ` on ${new Date(pastAttempt.submittedAt).toLocaleDateString()}` : ''}. Retakes are not allowed.
+              </p>
+            </div>
+          </div>
+          {pastAttempt?.submissionId && (
+            <button
+              type="button"
+              onClick={() => viewSubmissionScorecard(pastAttempt.submissionId)}
+              className="px-3.5 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shrink-0 cursor-pointer shadow-xs transition-colors"
+            >
+              View My Scorecard
+            </button>
+          )}
+        </div>
+      )}
+
+      {attempts.isFull && (
+        <div className="p-4 rounded-2xl bg-rose-50 dark:bg-rose-950/50 border border-rose-300 dark:border-rose-800 text-rose-900 dark:text-rose-200 text-xs flex items-start gap-3 animate-fadeIn">
+          <AlertTriangle className="w-5 h-5 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
+          <div className="space-y-0.5">
+            <p className="font-extrabold text-sm text-rose-700 dark:text-rose-300">
+              No More Sheets Are Available
+            </p>
+            <p className="text-xs leading-relaxed text-rose-600 dark:text-rose-400">
+              The teacher has restricted this examination to <strong>{attempts.maxCandidates} candidate sheets</strong>, and all available sheets have been taken. Further attempts are no longer permitted.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {schedule.isUpcoming && (
+        <div className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/50 border border-amber-300 dark:border-amber-800 text-amber-900 dark:text-amber-200 text-xs flex items-start gap-3 animate-fadeIn">
+          <Clock className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+          <div className="space-y-0.5">
+            <p className="font-extrabold text-sm text-amber-700 dark:text-amber-300">
+              Exam Scheduled to Start at {schedule.startTimeFormatted}
+            </p>
+            <p className="text-xs leading-relaxed text-amber-600 dark:text-amber-400">
+              This timed assessment has not started yet. You will be able to begin once the scheduled start time arrives.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {schedule.isExpired && (
+        <div className="p-4 rounded-2xl bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-xs flex items-start gap-3 animate-fadeIn">
+          <AlertTriangle className="w-5 h-5 text-slate-500 shrink-0 mt-0.5" />
+          <div className="space-y-0.5">
+            <p className="font-extrabold text-sm text-slate-700 dark:text-slate-300">
+              Exam Window Has Closed
+            </p>
+            <p className="text-xs leading-relaxed text-slate-500 dark:text-slate-400">
+              The scheduled time window for this assessment concluded on {schedule.endTimeFormatted}. New submissions are no longer accepted.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Hero Welcome Banner */}
       <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 dark:from-slate-950 dark:via-indigo-950 dark:to-slate-900 text-white rounded-2xl sm:rounded-3xl p-5 sm:p-8 shadow-xl relative overflow-hidden border border-slate-800">
@@ -453,6 +553,55 @@ export const WelcomeInstructionScreen: React.FC<WelcomeInstructionScreenProps> =
 
       </div>
 
+      {/* Schedule Window & Sheet Capacity Cards */}
+      {(exam.startTime || exam.endTime || exam.maxCandidates) && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-4">
+          {(exam.startTime || exam.endTime) && (
+            <div className="p-3.5 sm:p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs flex items-center gap-3 transition-colors">
+              <div className="p-2.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/70 border border-indigo-200 dark:border-indigo-800 text-indigo-600 dark:text-indigo-400 shrink-0">
+                <Calendar className="w-5 h-5" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <span className="text-[10px] sm:text-[11px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider block">
+                  Schedule Window
+                </span>
+                <p className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white truncate">
+                  {schedule.isUpcoming ? `Starts: ${schedule.startTimeFormatted}` : `Ends: ${schedule.endTimeFormatted || 'Open'}`}
+                </p>
+                <span className="text-[10px] text-slate-500 dark:text-slate-400 block truncate">
+                  {exam.startTime && exam.endTime ? `${schedule.startTimeFormatted} → ${schedule.endTimeFormatted}` : 'Scheduled assessment window'}
+                </span>
+              </div>
+            </div>
+          )}
+
+          {attempts.maxCandidates !== null && (
+            <div className="p-3.5 sm:p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs flex items-center gap-3 transition-colors">
+              <div className={`p-2.5 rounded-xl border shrink-0 ${
+                attempts.isFull
+                  ? 'bg-rose-50 dark:bg-rose-950/70 border-rose-200 dark:border-rose-800 text-rose-600 dark:text-rose-400'
+                  : 'bg-emerald-50 dark:bg-emerald-950/70 border-emerald-200 dark:border-emerald-800 text-emerald-600 dark:text-emerald-400'
+              }`}>
+                <Users className="w-5 h-5" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <span className="text-[10px] sm:text-[11px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider block">
+                  Available Exam Sheets
+                </span>
+                <p className={`text-xs sm:text-sm font-bold truncate ${
+                  attempts.isFull ? 'text-rose-600 dark:text-rose-400' : 'text-slate-900 dark:text-white'
+                }`}>
+                  {attempts.isFull ? 'No more sheets are available' : `${attempts.remainingSheets} of ${attempts.maxCandidates} Available`}
+                </p>
+                <span className="text-[10px] text-slate-500 dark:text-slate-400 block truncate">
+                  {attempts.attemptedCount} candidate attempts registered so far
+                </span>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Marking Scheme Alert */}
       <div className={`p-4 rounded-2xl border text-xs flex items-start gap-3 transition-colors ${
         exam.negativeMarking > 0 
@@ -629,30 +778,80 @@ export const WelcomeInstructionScreen: React.FC<WelcomeInstructionScreenProps> =
             Cancel & Return
           </button>
 
-          <button
-            type="button"
-            onClick={handleStartExamClick}
-            disabled={!hasAgreed}
-            className={`flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-bold text-xs sm:text-sm shadow-lg transition-all cursor-pointer ${
-              hasAgreed
-                ? 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-600/30 hover:scale-[1.01]'
-                : 'bg-slate-300 dark:bg-slate-800 text-slate-500 dark:text-slate-600 cursor-not-allowed shadow-none'
-            }`}
-          >
-            {(!isProctored || cameraStatus === 'granted') ? (
-              <>
-                <Zap className="w-4 h-4 fill-current" />
-                <span>Start Exam</span>
-                <ArrowRight className="w-4 h-4 stroke-[2.5]" />
-              </>
-            ) : (
-              <>
-                <Camera className="w-4 h-4" />
-                <span>{cameraStatus === 'checking' ? 'Testing Camera...' : 'Verify Camera & Start Exam'}</span>
-                <ArrowRight className="w-4 h-4 stroke-[2.5]" />
-              </>
-            )}
-          </button>
+          {isAlreadyAttempted ? (
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+              <button
+                type="button"
+                disabled
+                className="flex items-center justify-center gap-2 px-5 py-3 rounded-xl font-bold text-xs sm:text-sm bg-amber-600 text-white cursor-not-allowed shadow-none"
+              >
+                <Lock className="w-4 h-4" />
+                <span>Already Attempted (1 Attempt Limit)</span>
+              </button>
+              {pastAttempt?.submissionId && (
+                <button
+                  type="button"
+                  onClick={() => viewSubmissionScorecard(pastAttempt.submissionId)}
+                  className="flex items-center justify-center gap-1.5 px-4 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs sm:text-sm shadow-md transition-all cursor-pointer"
+                >
+                  <CheckSquare className="w-4 h-4" />
+                  <span>View Scorecard</span>
+                </button>
+              )}
+            </div>
+          ) : attempts.isFull ? (
+            <button
+              type="button"
+              disabled
+              className="flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-bold text-xs sm:text-sm bg-rose-600 text-white cursor-not-allowed shadow-none"
+            >
+              <AlertTriangle className="w-4 h-4" />
+              <span>No more sheets are available</span>
+            </button>
+          ) : schedule.isUpcoming ? (
+            <button
+              type="button"
+              disabled
+              className="flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-bold text-xs sm:text-sm bg-amber-600 text-white cursor-not-allowed shadow-none"
+            >
+              <Clock className="w-4 h-4" />
+              <span>Exam Starts {schedule.startTimeFormatted}</span>
+            </button>
+          ) : schedule.isExpired ? (
+            <button
+              type="button"
+              disabled
+              className="flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-bold text-xs sm:text-sm bg-slate-600 text-white cursor-not-allowed shadow-none"
+            >
+              <AlertTriangle className="w-4 h-4" />
+              <span>Exam Window Ended</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={handleStartExamClick}
+              disabled={!hasAgreed}
+              className={`flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-bold text-xs sm:text-sm shadow-lg transition-all cursor-pointer ${
+                hasAgreed
+                  ? 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-600/30 hover:scale-[1.01]'
+                  : 'bg-slate-300 dark:bg-slate-800 text-slate-500 dark:text-slate-600 cursor-not-allowed shadow-none'
+              }`}
+            >
+              {(!isProctored || cameraStatus === 'granted') ? (
+                <>
+                  <Zap className="w-4 h-4 fill-current" />
+                  <span>Start Exam</span>
+                  <ArrowRight className="w-4 h-4 stroke-[2.5]" />
+                </>
+              ) : (
+                <>
+                  <Camera className="w-4 h-4" />
+                  <span>{cameraStatus === 'checking' ? 'Testing Camera...' : 'Verify Camera & Start Exam'}</span>
+                  <ArrowRight className="w-4 h-4 stroke-[2.5]" />
+                </>
+              )}
+            </button>
+          )}
         </div>
       </div>
 

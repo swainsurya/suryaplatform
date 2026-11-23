@@ -59,7 +59,15 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
   studentRollNumber,
   onFinishExam,
 }) => {
-  const { exams, activeTestSession, updateExamProgress, theme, toggleTheme } = useExamStore();
+  const { 
+    exams, 
+    activeTestSession, 
+    updateExamProgress, 
+    theme, 
+    toggleTheme,
+    sendLiveHeartbeat,
+    liveSessions
+  } = useExamStore();
 
   // Active question list restored from session so questions & order NEVER change on refresh
   const [orderedQuestions] = useState<SanitizedQuestion[]>(() => {
@@ -374,6 +382,63 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, []);
+
+  // Periodic heartbeat emitted to Teacher Live Attendance Dashboard (every 5 seconds)
+  useEffect(() => {
+    if (submittedRef.current || isTerminatedRef.current) return;
+
+    const emitHeartbeat = () => {
+      if (submittedRef.current || isTerminatedRef.current) return;
+      const currentAnswers = userAnswersRef.current;
+      const answeredCount = Object.values(currentAnswers).filter((v) => v !== null && v !== undefined).length;
+      const latestViolation = violationsRef.current[violationsRef.current.length - 1];
+
+      sendLiveHeartbeat({
+        timeRemainingSeconds: secondsRemaining,
+        totalQuestions: orderedQuestions.length,
+        answeredCount,
+        markedForReviewCount: markedForReview.size,
+        currentIndex,
+        violationsCount: violationsRef.current.length,
+        lastViolationMessage: latestViolation?.message,
+        status: (typeof document !== 'undefined' && document.hidden) ? 'IDLE' : 'ONLINE'
+      });
+    };
+
+    // Emit initial ping immediately
+    emitHeartbeat();
+
+    // Pulse heartbeat every 5 seconds
+    const heartbeatInterval = setInterval(emitHeartbeat, 5000);
+
+    // Also emit immediately when tab visibility changes (online vs idle)
+    const onVisibilityChange = () => {
+      emitHeartbeat();
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
+    return () => {
+      clearInterval(heartbeatInterval);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
+  }, [sendLiveHeartbeat, secondsRemaining, orderedQuestions.length, markedForReview.size, currentIndex]);
+
+  // Check if candidate was terminated/disqualified by teacher in real time
+  useEffect(() => {
+    if (submittedRef.current || isTerminatedRef.current) return;
+    const currentSessionId = activeTestSession?.sessionId;
+    if (!currentSessionId) return;
+
+    const matched = liveSessions.find((s) => s.sessionId === currentSessionId);
+    if (matched?.isTerminatedByTeacher) {
+      isTerminatedRef.current = true;
+      setIsTerminatedByProctor(true);
+      setTerminationReason('Exam instructor has disqualified and terminated your live session in real time.');
+      setTimeout(() => {
+        handleFinalSubmit(false, true, 'Disqualified and terminated by exam instructor in real time.');
+      }, 1500);
+    }
+  }, [liveSessions, activeTestSession?.sessionId, handleFinalSubmit]);
 
   // Countdown Timer tied to absolute examEndTime
   useEffect(() => {

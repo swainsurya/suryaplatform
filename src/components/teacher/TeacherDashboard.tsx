@@ -20,13 +20,18 @@ import {
   StopCircle,
   PlayCircle,
   PowerOff,
-  ShieldCheck
+  ShieldCheck,
+  Calendar,
+  Lock,
+  Radio
 } from 'lucide-react';
 import { Exam, ExamSubmission } from '../../types/exam';
 import { ExamEditor } from './ExamEditor';
 import { ParticipantScorecards } from './ParticipantScorecards';
+import { LiveAttendanceMonitor } from './LiveAttendanceMonitor';
 import { useExamStore } from '../../store/useExamStore';
 import { testFirestoreConnection } from '../../services/firebase';
+import { getExamAttemptInfo, getExamScheduleInfo } from '../../services/examUtils';
 
 interface TeacherDashboardProps {
   exams: Exam[];
@@ -41,9 +46,9 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
   onRefreshData,
   onStudentPortalPreview
 }) => {
-  const { saveExam, deleteExam, endExam, reopenExam } = useExamStore();
+  const { saveExam, deleteExam, endExam, reopenExam, liveSessions } = useExamStore();
 
-  const [activeTab, setActiveTab] = useState<'exams' | 'submissions' | 'editor'>('exams');
+  const [activeTab, setActiveTab] = useState<'exams' | 'submissions' | 'live' | 'editor'>('exams');
   const [editingExam, setEditingExam] = useState<Exam | null>(null);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
   const [shareModalExam, setShareModalExam] = useState<Exam | null>(null);
@@ -153,6 +158,19 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
             ) : (
               <span className="text-[11px] text-slate-400 font-normal">All exams closed</span>
             )}
+            {liveSessions.length > 0 && (
+              <>
+                <span className="mx-1 text-white/30">•</span>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('live')}
+                  className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-300 bg-emerald-500/20 hover:bg-emerald-500/30 px-2 py-0.5 rounded-full border border-emerald-500/30 transition-colors cursor-pointer"
+                >
+                  <Radio className="w-3 h-3 text-emerald-400 animate-pulse" />
+                  <span>{liveSessions.length} Attending Live</span>
+                </button>
+              </>
+            )}
           </div>
 
           <h1 className="text-xl sm:text-3xl font-black tracking-tight">
@@ -252,6 +270,28 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
             <Users className="w-4 h-4" />
             <span>Scorecards ({submissions.length})</span>
           </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('live')}
+            className={`flex items-center gap-1.5 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl font-bold text-xs sm:text-sm whitespace-nowrap transition-all cursor-pointer ${
+              activeTab === 'live'
+                ? 'bg-indigo-600 text-white shadow-xs'
+                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+            }`}
+          >
+            <Radio className={`w-4 h-4 ${liveSessions.length > 0 ? 'text-emerald-400 animate-pulse' : ''}`} />
+            <span>Live Attending</span>
+            {liveSessions.length > 0 ? (
+              <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+                activeTab === 'live' ? 'bg-white text-indigo-700' : 'bg-emerald-500 text-white'
+              }`}>
+                {liveSessions.length}
+              </span>
+            ) : (
+              <span className="text-xs opacity-60">(0)</span>
+            )}
+          </button>
         </div>
       )}
 
@@ -262,6 +302,11 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
           onSaveSuccess={handleSaveSuccess}
           onCancel={() => setActiveTab('exams')}
         />
+      )}
+
+      {/* View: Live Attending Candidates */}
+      {activeTab === 'live' && (
+        <LiveAttendanceMonitor />
       )}
 
       {/* View: Participant Scorecards */}
@@ -296,6 +341,8 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
               {exams.map((exam) => {
                 const examSubmissions = submissions.filter(s => s.examId === exam.id);
+                const schedule = getExamScheduleInfo(exam);
+                const attemptInfo = getExamAttemptInfo(exam, examSubmissions);
                 const avgScore = examSubmissions.length > 0
                   ? (examSubmissions.reduce((sum, s) => sum + s.percentage, 0) / examSubmissions.length).toFixed(0)
                   : null;
@@ -351,6 +398,13 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                           <Award className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-amber-500 dark:text-amber-400" />
                           <span>{exam.totalMarks} Pts</span>
                         </div>
+                        <div 
+                          className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700"
+                          title={exam.singleAttemptOnly !== false ? 'Candidate limited to 1 attempt per device' : 'Multiple attempts permitted'}
+                        >
+                          <Lock className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-slate-500 dark:text-slate-400" />
+                          <span>{exam.singleAttemptOnly !== false ? '1 Attempt' : 'Multi-Attempt'}</span>
+                        </div>
                         {/* Proctoring Mode Badge with Quick Toggle */}
                         <button
                           type="button"
@@ -367,20 +421,74 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                         </button>
                       </div>
 
-                      {/* Student Attempts Stats */}
-                      <div className="p-2 sm:p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-100 dark:border-slate-800 text-xs flex items-center justify-between">
-                        <span className="text-slate-500 dark:text-slate-400 flex items-center gap-1 text-[11px]">
-                          <Users className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
-                          <span>Participants:</span>
-                        </span>
-                        <div className="font-bold text-slate-800 dark:text-slate-200 text-[11px]">
-                          {examSubmissions.length} Attempt{examSubmissions.length === 1 ? '' : 's'}
-                          {avgScore && (
-                            <span className="ml-1 text-[10px] font-normal text-slate-500 dark:text-slate-400">
-                              ({avgScore}%)
+                      {/* Schedule Window if set */}
+                      {(exam.startTime || exam.endTime) && (
+                        <div className="flex items-center justify-between text-[11px] p-2 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-100 dark:border-slate-800">
+                          <span className="text-slate-500 dark:text-slate-400 flex items-center gap-1 text-[11px]">
+                            <Calendar className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400 shrink-0" />
+                            <span>Schedule:</span>
+                          </span>
+                          {schedule.isUpcoming ? (
+                            <span className="font-bold text-amber-600 dark:text-amber-400 text-[10px] truncate">
+                              Starts {schedule.startTimeFormatted}
+                            </span>
+                          ) : schedule.isExpired ? (
+                            <span className="font-bold text-rose-600 dark:text-rose-400 text-[10px] truncate">
+                              Ended {schedule.endTimeFormatted}
+                            </span>
+                          ) : (
+                            <span className="font-bold text-emerald-600 dark:text-emerald-400 text-[10px] truncate">
+                              Live (Ends {schedule.endTimeFormatted || 'Open'})
                             </span>
                           )}
                         </div>
+                      )}
+
+                      {/* Student Attempts & Sheet Capacity Stats */}
+                      <div className="p-2 sm:p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-100 dark:border-slate-800 text-xs space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-slate-500 dark:text-slate-400 flex items-center gap-1 text-[11px]">
+                            <Users className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400 shrink-0" />
+                            <span>Exam Sheets:</span>
+                          </span>
+                          <div className="font-bold text-slate-800 dark:text-slate-200 text-[11px]">
+                            {attemptInfo.maxCandidates !== null ? (
+                              attemptInfo.isFull ? (
+                                <span className="text-rose-600 dark:text-rose-400 font-extrabold">
+                                  Full ({attemptInfo.attemptedCount}/{attemptInfo.maxCandidates})
+                                </span>
+                              ) : (
+                                <span className="text-emerald-700 dark:text-emerald-400">
+                                  {attemptInfo.remainingSheets} left ({attemptInfo.attemptedCount}/{attemptInfo.maxCandidates})
+                                </span>
+                              )
+                            ) : (
+                              <span>{examSubmissions.length} Attempt{examSubmissions.length === 1 ? '' : 's'}</span>
+                            )}
+                            {avgScore && (
+                              <span className="ml-1 text-[10px] font-normal text-slate-500 dark:text-slate-400">
+                                ({avgScore}%)
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        {attemptInfo.maxCandidates !== null && (
+                          <div className="space-y-1">
+                            <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-1.5 overflow-hidden">
+                              <div 
+                                className={`h-1.5 rounded-full transition-all ${
+                                  attemptInfo.isFull ? 'bg-rose-500' : 'bg-indigo-600'
+                                }`}
+                                style={{ width: `${Math.min(100, (attemptInfo.attemptedCount / attemptInfo.maxCandidates) * 100)}%` }}
+                              />
+                            </div>
+                            {attemptInfo.isFull && (
+                              <p className="text-[10px] text-rose-600 dark:text-rose-400 font-bold">
+                                No more sheets are available for this exam.
+                              </p>
+                            )}
+                          </div>
+                        )}
                       </div>
 
                       {/* Ended status banner if exam was concluded */}

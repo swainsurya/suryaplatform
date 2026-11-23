@@ -14,11 +14,13 @@ import {
   PlayCircle,
   PowerOff,
   RefreshCw,
-  ShieldAlert
+  ShieldAlert,
+  Calendar
 } from 'lucide-react';
 import { Exam, ExamSubmission } from '../../types/exam';
 import { ScorecardDetailModal } from './ScorecardDetailModal';
 import { useExamStore } from '../../store/useExamStore';
+import { getExamAttemptInfo, getExamScheduleInfo } from '../../services/examUtils';
 
 interface ParticipantScorecardsProps {
   exams: Exam[];
@@ -231,6 +233,31 @@ export const ParticipantScorecards: React.FC<ParticipantScorecardsProps> = ({
                 {selectedExam.endedAt && (
                   <span>• Ended at {new Date(selectedExam.endedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                 )}
+                {(() => {
+                  const attempts = getExamAttemptInfo(selectedExam, submissions);
+                  const schedule = getExamScheduleInfo(selectedExam);
+                  return (
+                    <>
+                      {attempts.maxCandidates !== null && (
+                        <span className={`font-semibold px-2 py-0.5 rounded ${
+                          attempts.isFull 
+                            ? 'bg-rose-100 dark:bg-rose-950/70 text-rose-700 dark:text-rose-300 font-bold'
+                            : 'bg-emerald-100 dark:bg-emerald-950/70 text-emerald-700 dark:text-emerald-300'
+                        }`}>
+                          {attempts.isFull 
+                            ? `No more sheets are available (${attempts.attemptedCount}/${attempts.maxCandidates})` 
+                            : `Sheets: ${attempts.remainingSheets}/${attempts.maxCandidates} available`}
+                        </span>
+                      )}
+                      {(selectedExam.startTime || selectedExam.endTime) && (
+                        <span className="text-[10px] bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded text-slate-600 dark:text-slate-300 inline-flex items-center gap-1">
+                          <Calendar className="w-3 h-3 text-indigo-500" />
+                          <span>Window: {schedule.startTimeFormatted || 'Now'} → {schedule.endTimeFormatted || 'Open'}</span>
+                        </span>
+                      )}
+                    </>
+                  );
+                })()}
               </div>
             </div>
           </div>

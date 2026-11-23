@@ -15,7 +15,7 @@ import {
   Firestore,
   Unsubscribe
 } from 'firebase/firestore';
-import { Exam, ExamSubmission } from '../types/exam';
+import { Exam, ExamSubmission, LiveCandidateSession } from '../types/exam';
 
 export interface FirebaseConfig {
   apiKey: string;
@@ -119,6 +119,11 @@ export function sanitizeExamForFirestore(exam: Exam): Record<string, any> {
     isActive: exam.isActive ?? true,
     isEnded: Boolean(exam.isEnded),
     endedAt: exam.endedAt ? String(exam.endedAt) : null,
+    startTime: exam.startTime ? String(exam.startTime) : null,
+    endTime: exam.endTime ? String(exam.endTime) : null,
+    maxCandidates: exam.maxCandidates !== undefined && exam.maxCandidates !== null && Number(exam.maxCandidates) > 0 ? Number(exam.maxCandidates) : null,
+    attemptedCount: Number(exam.attemptedCount) || 0,
+    singleAttemptOnly: exam.singleAttemptOnly !== undefined ? Boolean(exam.singleAttemptOnly) : true,
     questions: (exam.questions || []).map((q, idx) => ({
       id: q.id || `q-${idx}-${Date.now()}`,
       questionText: String(q.questionText || ''),
@@ -525,3 +530,101 @@ export async function deleteSubmissionFromFirebase(submissionId: string): Promis
     return false;
   }
 }
+
+/**
+ * Firestore CRUD: Save or update active live candidate session heartbeat
+ */
+export async function saveLiveSessionToFirebase(session: LiveCandidateSession): Promise<void> {
+  const db = getFirebaseDb();
+  if (!db) return;
+
+  try {
+    const docRef = doc(db, 'live_sessions', session.sessionId);
+    await setDoc(
+      docRef,
+      {
+        sessionId: String(session.sessionId),
+        examId: String(session.examId),
+        examCode: String(session.examCode),
+        examTitle: String(session.examTitle),
+        studentName: String(session.studentName),
+        studentRollNumber: session.studentRollNumber ? String(session.studentRollNumber) : '',
+        studentEmail: session.studentEmail ? String(session.studentEmail) : '',
+        startedAt: session.startedAt,
+        lastHeartbeat: Number(session.lastHeartbeat) || Date.now(),
+        timeRemainingSeconds: Number(session.timeRemainingSeconds) || 0,
+        currentIndex: Number(session.currentIndex) || 0,
+        totalQuestions: Number(session.totalQuestions) || 0,
+        answeredCount: Number(session.answeredCount) || 0,
+        markedForReviewCount: Number(session.markedForReviewCount) || 0,
+        violationsCount: Number(session.violationsCount) || 0,
+        lastViolationMessage: session.lastViolationMessage ? String(session.lastViolationMessage) : '',
+        status: session.status || 'ONLINE',
+        isTerminatedByTeacher: Boolean(session.isTerminatedByTeacher),
+      },
+      { merge: true }
+    );
+  } catch (err) {
+    console.warn('Firebase save live session notice:', err);
+  }
+}
+
+/**
+ * Firestore CRUD: Delete ended or submitted live candidate session
+ */
+export async function deleteLiveSessionFromFirebase(sessionId: string): Promise<void> {
+  const db = getFirebaseDb();
+  if (!db) return;
+
+  try {
+    const docRef = doc(db, 'live_sessions', sessionId);
+    await deleteDoc(docRef);
+  } catch (err) {
+    console.warn('Firebase delete live session notice:', err);
+  }
+}
+
+/**
+ * Firestore Real-time listener: Stream all live attending candidates
+ */
+export function subscribeToLiveSessions(
+  onUpdate: (sessions: LiveCandidateSession[]) => void
+): Unsubscribe | null {
+  const db = getFirebaseDb();
+  if (!db) return null;
+
+  try {
+    const colRef = collection(db, 'live_sessions');
+    return onSnapshot(
+      colRef,
+      (snapshot) => {
+        const list: LiveCandidateSession[] = [];
+        snapshot.forEach((docSnap) => {
+          list.push({ ...docSnap.data(), sessionId: docSnap.id } as LiveCandidateSession);
+        });
+        onUpdate(list);
+      },
+      (error) => {
+        console.warn('Real-time live sessions subscription notice:', error);
+      }
+    );
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Firestore CRUD: Force terminate a candidate in real time
+ */
+export async function terminateLiveCandidateSession(sessionId: string): Promise<void> {
+  const db = getFirebaseDb();
+  if (!db) return;
+
+  try {
+    const docRef = doc(db, 'live_sessions', sessionId);
+    await setDoc(docRef, { isTerminatedByTeacher: true }, { merge: true });
+  } catch (err) {
+    console.warn('Firebase terminate live session notice:', err);
+  }
+}
+

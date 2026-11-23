@@ -12,7 +12,9 @@ import {
   FileUp, 
   Sliders,
   AlertCircle,
-  ShieldCheck
+  ShieldCheck,
+  Calendar,
+  Users
 } from 'lucide-react';
 import { Exam, Question } from '../../types/exam';
 import { McqBuilderManual } from './McqBuilderManual';
@@ -24,6 +26,18 @@ interface ExamEditorProps {
   initialExam?: Exam | null;
   onSaveSuccess: (savedExam: Exam) => void;
   onCancel: () => void;
+}
+
+function toDatetimeLocal(isoStr?: string): string {
+  if (!isoStr) return '';
+  try {
+    const d = new Date(isoStr);
+    if (isNaN(d.getTime())) return '';
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  } catch {
+    return '';
+  }
 }
 
 export const ExamEditor: React.FC<ExamEditorProps> = ({
@@ -57,6 +71,14 @@ export const ExamEditor: React.FC<ExamEditorProps> = ({
   );
   const [maxViolationsAllowed, setMaxViolationsAllowed] = useState<number>(
     initialExam?.maxViolationsAllowed ?? 3
+  );
+  const [startTime, setStartTime] = useState<string>(toDatetimeLocal(initialExam?.startTime));
+  const [endTime, setEndTime] = useState<string>(toDatetimeLocal(initialExam?.endTime));
+  const [maxCandidates, setMaxCandidates] = useState<string>(
+    initialExam?.maxCandidates ? String(initialExam.maxCandidates) : ''
+  );
+  const [singleAttemptOnly, setSingleAttemptOnly] = useState<boolean>(
+    initialExam?.singleAttemptOnly !== undefined ? Boolean(initialExam.singleAttemptOnly) : true
   );
   const [isActive, setIsActive] = useState<boolean>(initialExam?.isActive ?? true);
   
@@ -107,6 +129,18 @@ export const ExamEditor: React.FC<ExamEditorProps> = ({
       setValidationError('Please add at least 1 MCQ question to the exam.');
       return;
     }
+    if (startTime && endTime) {
+      const s = new Date(startTime).getTime();
+      const eTime = new Date(endTime).getTime();
+      if (!isNaN(s) && !isNaN(eTime) && eTime <= s) {
+        setValidationError('Exam End Time must be later than Start Time.');
+        return;
+      }
+    }
+    if (maxCandidates && (isNaN(Number(maxCandidates)) || Number(maxCandidates) <= 0)) {
+      setValidationError('Available sheets / candidate limit must be a positive number.');
+      return;
+    }
 
     const examData: Exam = {
       id: initialExam?.id || `exam-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
@@ -121,6 +155,11 @@ export const ExamEditor: React.FC<ExamEditorProps> = ({
       shuffleQuestions,
       enableAiProctoring,
       maxViolationsAllowed: Number(maxViolationsAllowed),
+      startTime: startTime ? new Date(startTime).toISOString() : undefined,
+      endTime: endTime ? new Date(endTime).toISOString() : undefined,
+      maxCandidates: maxCandidates && Number(maxCandidates) > 0 ? Math.floor(Number(maxCandidates)) : undefined,
+      attemptedCount: initialExam?.attemptedCount || 0,
+      singleAttemptOnly,
       createdAt: initialExam?.createdAt || new Date().toISOString(),
       isActive,
       isEnded: isActive ? false : (initialExam?.isEnded ?? false),
@@ -336,6 +375,82 @@ export const ExamEditor: React.FC<ExamEditorProps> = ({
               />
             </div>
 
+            {/* Exam Schedule: Start Time & End Time */}
+            <div className="pt-2 border-t border-slate-100 dark:border-slate-800 space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                  <Calendar className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                  <span>Exam Schedule Window</span>
+                </label>
+                {(startTime || endTime) && (
+                  <button
+                    type="button"
+                    onClick={() => { setStartTime(''); setEndTime(''); }}
+                    className="text-[10px] text-rose-500 hover:text-rose-600 font-semibold cursor-pointer"
+                  >
+                    Clear Window
+                  </button>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-[10px] font-medium text-slate-500 dark:text-slate-400 mb-0.5">
+                    Start Date & Time
+                  </label>
+                  <input
+                    type="datetime-local"
+                    value={startTime}
+                    onChange={(e) => setStartTime(e.target.value)}
+                    className="w-full px-2.5 py-1.5 text-xs bg-slate-50 dark:bg-slate-800/80 text-slate-900 dark:text-white border border-slate-300 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-colors"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-medium text-slate-500 dark:text-slate-400 mb-0.5">
+                    End Date & Time
+                  </label>
+                  <input
+                    type="datetime-local"
+                    value={endTime}
+                    onChange={(e) => setEndTime(e.target.value)}
+                    className="w-full px-2.5 py-1.5 text-xs bg-slate-50 dark:bg-slate-800/80 text-slate-900 dark:text-white border border-slate-300 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-colors"
+                  />
+                </div>
+              </div>
+              <p className="text-[10px] text-slate-400 dark:text-slate-500">
+                Candidates can only attempt within this window. Leave blank for anytime access.
+              </p>
+            </div>
+
+            {/* Candidate Limit & Available Exam Sheets */}
+            <div className="pt-2 border-t border-slate-100 dark:border-slate-800 space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                  <Users className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                  <span>Available Sheets (Candidate Limit)</span>
+                </label>
+                {maxCandidates ? (
+                  <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/70 px-2 py-0.5 rounded-full border border-indigo-200 dark:border-indigo-800">
+                    {maxCandidates} sheets
+                  </span>
+                ) : (
+                  <span className="text-[10px] text-slate-400">Unlimited</span>
+                )}
+              </div>
+              <input
+                type="number"
+                min="1"
+                placeholder="e.g. 50 (leave empty for unlimited)"
+                value={maxCandidates}
+                onChange={(e) => setMaxCandidates(e.target.value)}
+                className="w-full px-3 py-2 text-xs sm:text-sm bg-slate-50 dark:bg-slate-800/80 text-slate-900 dark:text-white border border-slate-300 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-colors"
+              />
+              <p className="text-[10px] text-slate-400 dark:text-slate-500">
+                Limits candidate attempts. Once full, students will see <strong>"No more sheets are available"</strong>.
+              </p>
+            </div>
+
             {/* Switches */}
             <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-slate-800">
               <label className="flex items-center justify-between text-xs font-medium text-slate-700 dark:text-slate-300 cursor-pointer">
@@ -355,6 +470,21 @@ export const ExamEditor: React.FC<ExamEditorProps> = ({
                   checked={shuffleQuestions}
                   onChange={(e) => setShuffleQuestions(e.target.checked)}
                   className="w-4 h-4 text-indigo-600 rounded cursor-pointer"
+                />
+              </label>
+
+              <label className="flex items-start justify-between text-xs font-medium text-slate-700 dark:text-slate-300 cursor-pointer pt-1">
+                <div className="pr-2">
+                  <span className="block font-semibold">Single Attempt Only</span>
+                  <span className="text-[10px] text-slate-400 dark:text-slate-500 font-normal leading-tight block mt-0.5">
+                    Strictly limits candidates to 1 attempt per browser/device.
+                  </span>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={singleAttemptOnly}
+                  onChange={(e) => setSingleAttemptOnly(e.target.checked)}
+                  className="w-4 h-4 text-indigo-600 rounded cursor-pointer shrink-0 mt-0.5"
                 />
               </label>
 
@@ -447,6 +577,28 @@ export const ExamEditor: React.FC<ExamEditorProps> = ({
               <span>Time Allowed:</span>
               <span>{durationMinutes} minutes</span>
             </div>
+            <div className="flex justify-between text-indigo-700 dark:text-indigo-300">
+              <span>Available Sheets:</span>
+              <span className="font-semibold">{maxCandidates ? `${maxCandidates} sheets` : 'Unlimited'}</span>
+            </div>
+            <div className="flex justify-between text-indigo-700 dark:text-indigo-300">
+              <span>Attempt Policy:</span>
+              <span className="font-semibold">{singleAttemptOnly ? '1 Attempt Only' : 'Multiple Allowed'}</span>
+            </div>
+            {(startTime || endTime) && (
+              <div className="pt-1.5 mt-1 border-t border-indigo-200/60 dark:border-indigo-900/60 text-[11px] text-indigo-800 dark:text-indigo-300 space-y-0.5">
+                {startTime && (
+                  <div className="truncate">
+                    <span className="font-semibold">Starts:</span> {new Date(startTime).toLocaleString()}
+                  </div>
+                )}
+                {endTime && (
+                  <div className="truncate">
+                    <span className="font-semibold">Ends:</span> {new Date(endTime).toLocaleString()}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
 

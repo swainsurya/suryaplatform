@@ -31,6 +31,11 @@ export interface Exam {
   isActive: boolean;
   isEnded?: boolean;
   endedAt?: string;
+  startTime?: string; // Scheduled start date/time (ISO or YYYY-MM-DDTHH:mm)
+  endTime?: string; // Scheduled end date/time (ISO or YYYY-MM-DDTHH:mm)
+  maxCandidates?: number; // Maximum candidate attempts / available sheets
+  attemptedCount?: number; // Count of candidates who have started/attempted the exam
+  singleAttemptOnly?: boolean; // Restrict candidate to only 1 attempt per device
   questions: Question[];
 }
 
@@ -87,6 +92,7 @@ export interface ExamSubmission {
 }
 
 export interface ActiveExamSession {
+  sessionId?: string; // Live session identifier in Firestore / local storage
   exam: Exam;
   studentName: string;
   studentRollNumber?: string;
@@ -97,4 +103,25 @@ export interface ActiveExamSession {
   userAnswers: Record<string, number | null>; // Selected answers saved in real-time
   markedForReview: string[]; // Marked question IDs
   currentIndex: number; // Current question index
+}
+
+export interface LiveCandidateSession {
+  sessionId: string;
+  examId: string;
+  examCode: string;
+  examTitle: string;
+  studentName: string;
+  studentRollNumber?: string;
+  studentEmail?: string;
+  startedAt: string;
+  lastHeartbeat: number; // Unix timestamp in ms
+  timeRemainingSeconds: number;
+  currentIndex: number;
+  totalQuestions: number;
+  answeredCount: number;
+  markedForReviewCount: number;
+  violationsCount: number;
+  lastViolationMessage?: string;
+  status: 'ONLINE' | 'IDLE' | 'DISCONNECTED';
+  isTerminatedByTeacher?: boolean;
 }
