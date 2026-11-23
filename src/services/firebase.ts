@@ -585,6 +585,28 @@ export async function deleteLiveSessionFromFirebase(sessionId: string): Promise<
 }
 
 /**
+ * Firestore CRUD: Fetch all active live candidate sessions
+ */
+export async function fetchLiveSessionsFromFirebase(): Promise<LiveCandidateSession[] | null> {
+  const db = getFirebaseDb();
+  if (!db) return null;
+
+  try {
+    const colRef = collection(db, 'live_sessions');
+    const snapshot = await getDocs(colRef);
+    const list: LiveCandidateSession[] = [];
+    snapshot.forEach((docSnap) => {
+      const data = docSnap.data();
+      list.push({ ...data, sessionId: docSnap.id } as LiveCandidateSession);
+    });
+    return list;
+  } catch (err) {
+    console.warn('Firebase fetch live sessions notice:', err);
+    return null;
+  }
+}
+
+/**
  * Firestore Real-time listener: Stream all live attending candidates
  */
 export function subscribeToLiveSessions(

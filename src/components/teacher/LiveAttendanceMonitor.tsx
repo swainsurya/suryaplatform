@@ -20,7 +20,7 @@ import { useExamStore } from '../../store/useExamStore';
 import { LiveCandidateSession } from '../../types/exam';
 
 export const LiveAttendanceMonitor: React.FC = () => {
-  const { liveSessions, exams, terminateLiveCandidateByTeacher, cleanUpLiveSession } = useExamStore();
+  const { liveSessions, exams, terminateLiveCandidateByTeacher, cleanUpLiveSession, syncLiveSessions } = useExamStore();
 
   const [selectedExamId, setSelectedExamId] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -29,22 +29,48 @@ export const LiveAttendanceMonitor: React.FC = () => {
   const [selectedCandidateDetail, setSelectedCandidateDetail] = useState<LiveCandidateSession | null>(null);
   const [isTerminating, setIsTerminating] = useState<boolean>(false);
   const [terminatedToast, setTerminatedToast] = useState<string | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [now, setNow] = useState<number>(() => Date.now());
 
-  // Tick clock every 3 seconds to keep ping age and elapsed times fresh
+  // Automatic synchronization from local storage and Cloud Firestore every 3 seconds
   useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 3000);
+    syncLiveSessions();
+    const timer = setInterval(() => {
+      syncLiveSessions();
+      setNow(Date.now());
+    }, 3000);
     return () => clearInterval(timer);
-  }, []);
+  }, [syncLiveSessions]);
+
+  const handleManualRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      await syncLiveSessions();
+      setNow(Date.now());
+    } finally {
+      setTimeout(() => setIsRefreshing(false), 500);
+    }
+  };
+
   const enhancedSessions = useMemo(() => {
     return liveSessions.map((session) => {
-      const lastPingTime = session.lastHeartbeat || 0;
-      const ageSeconds = !lastPingTime ? 999 : Math.max(0, Math.floor((now - lastPingTime) / 1000));
+      let lastPingMs = 0;
+      if (typeof session.lastHeartbeat === 'number') {
+        lastPingMs = session.lastHeartbeat;
+      } else if (typeof session.lastHeartbeat === 'string') {
+        const parsed = new Date(session.lastHeartbeat).getTime();
+        lastPingMs = isNaN(parsed) ? 0 : parsed;
+      } else if (session.startedAt) {
+        const parsed = new Date(session.startedAt).getTime();
+        lastPingMs = isNaN(parsed) ? 0 : parsed;
+      }
+
+      const ageSeconds = lastPingMs > 0 ? Math.max(0, Math.floor((now - lastPingMs) / 1000)) : 999;
       
-      let computedStatus: 'ONLINE' | 'IDLE' | 'DISCONNECTED' = session.status;
+      let computedStatus: 'ONLINE' | 'IDLE' | 'DISCONNECTED' = session.status || 'ONLINE';
       if (session.isTerminatedByTeacher) {
         computedStatus = 'DISCONNECTED';
-      } else if (ageSeconds > 25) {
+      } else if (ageSeconds > 30) {
         computedStatus = 'DISCONNECTED';
       } else if (ageSeconds > 10 || session.status === 'IDLE') {
         computedStatus = 'IDLE';
@@ -145,7 +171,17 @@ export const LiveAttendanceMonitor: React.FC = () => {
             </p>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2.5">
+            <button
+              type="button"
+              onClick={handleManualRefresh}
+              disabled={isRefreshing}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:hover:bg-indigo-900/60 text-xs font-semibold text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 transition-all cursor-pointer"
+              title="Refresh live candidate feed from Firestore and Local storage"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
+              <span>{isRefreshing ? 'Syncing...' : 'Refresh'}</span>
+            </button>
             <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-xs font-medium text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
               <Radio className="w-3.5 h-3.5 text-emerald-500 animate-pulse" />
               <span>Real-Time Sync Active</span>
@@ -284,6 +320,28 @@ export const LiveAttendanceMonitor: React.FC = () => {
               ? 'When students join an exam and begin answering questions, their real-time telemetry, focus status, and answering progress will stream here automatically.'
               : 'Try clearing your search query or selecting a different exam to view active participants.'}
           </p>
+
+          <div className="mt-5 flex flex-wrap justify-center gap-2">
+            <button
+              type="button"
+              onClick={handleManualRefresh}
+              disabled={isRefreshing}
+              className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-xs transition-colors cursor-pointer"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
+              <span>Refresh Status</span>
+            </button>
+            {exams.length > 0 && (
+              <a
+                href={`?exam=${exams[0]?.code}`}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-bold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl transition-colors"
+              >
+                <span>Launch Test Candidate ({exams[0]?.code}) ↗</span>
+              </a>
+            )}
+          </div>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

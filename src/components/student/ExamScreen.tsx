@@ -176,6 +176,22 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
     userAnswersRef.current = userAnswers;
   }, [userAnswers]);
 
+  const secondsRemainingRef = useRef(secondsRemaining);
+  const currentIndexRef = useRef(currentIndex);
+  const markedForReviewRef = useRef(markedForReview);
+
+  useEffect(() => {
+    secondsRemainingRef.current = secondsRemaining;
+  }, [secondsRemaining]);
+
+  useEffect(() => {
+    currentIndexRef.current = currentIndex;
+  }, [currentIndex]);
+
+  useEffect(() => {
+    markedForReviewRef.current = markedForReview;
+  }, [markedForReview]);
+
   // Auto-scroll horizontal pill bar to center active question
   useEffect(() => {
     if (activePillRef.current && stripScrollRef.current) {
@@ -394,11 +410,11 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
       const latestViolation = violationsRef.current[violationsRef.current.length - 1];
 
       sendLiveHeartbeat({
-        timeRemainingSeconds: secondsRemaining,
+        timeRemainingSeconds: secondsRemainingRef.current,
         totalQuestions: orderedQuestions.length,
         answeredCount,
-        markedForReviewCount: markedForReview.size,
-        currentIndex,
+        markedForReviewCount: markedForReviewRef.current.size,
+        currentIndex: currentIndexRef.current,
         violationsCount: violationsRef.current.length,
         lastViolationMessage: latestViolation?.message,
         status: (typeof document !== 'undefined' && document.hidden) ? 'IDLE' : 'ONLINE'
@@ -421,7 +437,7 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
       clearInterval(heartbeatInterval);
       document.removeEventListener('visibilitychange', onVisibilityChange);
     };
-  }, [sendLiveHeartbeat, secondsRemaining, orderedQuestions.length, markedForReview.size, currentIndex]);
+  }, [sendLiveHeartbeat, orderedQuestions.length]);
 
   // Check if candidate was terminated/disqualified by teacher in real time
   useEffect(() => {

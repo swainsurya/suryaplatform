@@ -565,8 +565,13 @@ export const WelcomeInstructionScreen: React.FC<WelcomeInstructionScreenProps> =
                 <span className="text-[10px] sm:text-[11px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider block">
                   Schedule Window
                 </span>
-                <p className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white truncate">
-                  {schedule.isUpcoming ? `Starts: ${schedule.startTimeFormatted}` : `Ends: ${schedule.endTimeFormatted || 'Open'}`}
+                <p className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white truncate flex items-center gap-1.5">
+                  {!schedule.isUpcoming && !schedule.isExpired && (
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+                  )}
+                  <span>
+                    {schedule.isUpcoming ? `Starts: ${schedule.startTimeFormatted}` : `Live Now (Ends: ${schedule.endTimeFormatted || 'Open'})`}
+                  </span>
                 </p>
                 <span className="text-[10px] text-slate-500 dark:text-slate-400 block truncate">
                   {exam.startTime && exam.endTime ? `${schedule.startTimeFormatted} → ${schedule.endTimeFormatted}` : 'Scheduled assessment window'}

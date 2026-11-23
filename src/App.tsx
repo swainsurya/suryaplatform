@@ -24,6 +24,7 @@ export function App() {
     startExam,
     finishExam,
     exitToHome,
+    syncLiveSessions,
   } = useExamStore();
 
   // Initialize store and check URL parameters on initial mount
@@ -43,9 +44,9 @@ export function App() {
   }, []);
 
   const handleTestRunFromTeacher = (examCode: string) => {
-    setCurrentView('student');
-    setUrlExamCode(examCode);
     exitToHome();
+    setUrlExamCode(examCode);
+    setCurrentView('student');
   };
 
   return (
@@ -78,7 +79,7 @@ export function App() {
             <TeacherDashboard
               exams={exams}
               submissions={submissions}
-              onRefreshData={() => {}}
+              onRefreshData={syncLiveSessions}
               onStudentPortalPreview={handleTestRunFromTeacher}
             />
           ) : (

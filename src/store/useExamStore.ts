@@ -19,7 +19,8 @@ import {
   getLiveSessionsFromLocal,
   saveLiveSessionToLocal,
   updateLiveSessionInLocal,
-  deleteLiveSessionFromLocal
+  deleteLiveSessionFromLocal,
+  LIVE_SESSIONS_KEY
 } from '../services/storage';
 import { 
   getFirebaseDb, 
@@ -33,11 +34,30 @@ import {
   deleteSubmissionFromFirebase,
   subscribeToExams,
   subscribeToSubmissions,
+  fetchLiveSessionsFromFirebase,
   saveLiveSessionToFirebase,
   deleteLiveSessionFromFirebase,
   subscribeToLiveSessions,
   terminateLiveCandidateSession
 } from '../services/firebase';
+
+function mergeCandidateSessions(local: LiveCandidateSession[], remote: LiveCandidateSession[]): LiveCandidateSession[] {
+  const map = new Map<string, LiveCandidateSession>();
+  for (const s of local) {
+    if (s && s.sessionId) map.set(s.sessionId, s);
+  }
+  for (const s of remote) {
+    if (s && s.sessionId) {
+      const existing = map.get(s.sessionId);
+      const remoteHb = Number(s.lastHeartbeat) || (s.lastHeartbeat ? new Date(s.lastHeartbeat).getTime() : 0);
+      const localHb = existing ? (Number(existing.lastHeartbeat) || (existing.lastHeartbeat ? new Date(existing.lastHeartbeat).getTime() : 0)) : 0;
+      if (!existing || remoteHb >= localHb) {
+        map.set(s.sessionId, s);
+      }
+    }
+  }
+  return Array.from(map.values());
+}
 
 interface ExamState {
   exams: Exam[];
@@ -68,6 +88,7 @@ interface ExamState {
   sendLiveHeartbeat: (updates: Partial<LiveCandidateSession>) => Promise<void>;
   terminateLiveCandidateByTeacher: (sessionId: string) => Promise<void>;
   cleanUpLiveSession: (sessionId?: string) => Promise<void>;
+  syncLiveSessions: () => Promise<void>;
   finishExam: (
     userAnswers: Record<string, number | null>, 
     timeSpentSeconds: number, 
@@ -159,10 +180,20 @@ export const useExamStore = create<ExamState>((set, get) => ({
         } else if (e.key === 'surya_submissions_data') {
           const updatedSubs = getSubmissions();
           set({ submissions: updatedSubs });
-        } else if (e.key === 'surya_live_sessions_data') {
+        } else if (
+          e.key === LIVE_SESSIONS_KEY || 
+          e.key === 'surya_live_attending_sessions' || 
+          e.key === 'surya_live_sessions_data'
+        ) {
           const updatedLive = getLiveSessionsFromLocal();
-          set({ liveSessions: updatedLive });
+          set((state) => ({ liveSessions: mergeCandidateSessions(updatedLive, state.liveSessions) }));
         }
+      });
+
+      // Synchronize in the same window when local session is saved/updated/deleted
+      window.addEventListener('surya_live_sessions_updated', () => {
+        const updatedLive = getLiveSessionsFromLocal();
+        set((state) => ({ liveSessions: mergeCandidateSessions(updatedLive, state.liveSessions) }));
       });
     }
 
@@ -186,6 +217,12 @@ export const useExamStore = create<ExamState>((set, get) => ({
         set({ submissions: remoteSubs });
       }
 
+      // Fetch live candidate sessions from Firestore on initial startup
+      const remoteLive = await fetchLiveSessionsFromFirebase();
+      if (remoteLive !== null && remoteLive.length > 0) {
+        set((state) => ({ liveSessions: mergeCandidateSessions(state.liveSessions, remoteLive) }));
+      }
+
       // Bind real-time Firestore listeners for instant sync across devices
       subscribeToExams((updatedExams) => {
         if (updatedExams) {
@@ -201,7 +238,7 @@ export const useExamStore = create<ExamState>((set, get) => ({
 
       subscribeToLiveSessions((remoteLiveSessions) => {
         if (remoteLiveSessions) {
-          set({ liveSessions: remoteLiveSessions });
+          set((state) => ({ liveSessions: mergeCandidateSessions(state.liveSessions, remoteLiveSessions) }));
         }
       });
     }
@@ -481,6 +518,17 @@ export const useExamStore = create<ExamState>((set, get) => ({
       activeLiveSessionId: state.activeLiveSessionId === sessionId ? null : state.activeLiveSessionId,
       liveSessions: state.liveSessions.filter(s => s.sessionId !== sessionId)
     }));
+  },
+
+  syncLiveSessions: async () => {
+    const local = getLiveSessionsFromLocal();
+    const remote = await fetchLiveSessionsFromFirebase();
+    if (remote !== null && remote.length > 0) {
+      const merged = mergeCandidateSessions(local, remote);
+      set({ liveSessions: merged });
+    } else {
+      set({ liveSessions: local });
+    }
   },
 
   finishExam: async (userAnswers, timeSpentSeconds, isEndedByTeacher = false, proctoringData) => {

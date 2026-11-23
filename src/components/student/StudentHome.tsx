@@ -264,8 +264,9 @@ export const StudentHome: React.FC<StudentHomeProps> = ({
                             Ended {schedule.endTimeFormatted}
                           </span>
                         ) : (
-                          <span className="font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded text-[10px] border border-emerald-200 dark:border-emerald-800">
-                            Active (Ends {schedule.endTimeFormatted})
+                          <span className="font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded text-[10px] border border-emerald-200 dark:border-emerald-800 flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                            <span>Live Now (Ends {schedule.endTimeFormatted || 'Open'})</span>
                           </span>
                         )}
                       </div>

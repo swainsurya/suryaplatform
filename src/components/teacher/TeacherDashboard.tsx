@@ -343,6 +343,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                 const examSubmissions = submissions.filter(s => s.examId === exam.id);
                 const schedule = getExamScheduleInfo(exam);
                 const attemptInfo = getExamAttemptInfo(exam, examSubmissions);
+                const liveCountForExam = liveSessions.filter(s => s.examId === exam.id || s.examCode === exam.code).length;
                 const avgScore = examSubmissions.length > 0
                   ? (examSubmissions.reduce((sum, s) => sum + s.percentage, 0) / examSubmissions.length).toFixed(0)
                   : null;
@@ -355,9 +356,22 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                     {/* Card Header */}
                     <div className="p-4 sm:p-5 space-y-2.5 sm:space-y-3">
                       <div className="flex items-center justify-between gap-2">
-                        <span className="text-[10px] sm:text-[11px] font-mono font-bold tracking-wider px-2 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-950/70 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
-                          {exam.code}
-                        </span>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-[10px] sm:text-[11px] font-mono font-bold tracking-wider px-2 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-950/70 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+                            {exam.code}
+                          </span>
+                          {liveCountForExam > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => setActiveTab('live')}
+                              className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500 text-white shadow-xs animate-pulse hover:bg-emerald-600 transition-colors cursor-pointer"
+                              title="Candidates are attending this exam right now. Click to view live stream."
+                            >
+                              <span className="w-1.5 h-1.5 rounded-full bg-white" />
+                              <span>{liveCountForExam} Writing Live</span>
+                            </button>
+                          )}
+                        </div>
                         
                         {/* Status Toggle Pill */}
                         <button

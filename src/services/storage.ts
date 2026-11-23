@@ -468,7 +468,7 @@ export function clearDeviceExamAttempt(examId: string, examCode?: string): void 
   }
 }
 
-const LIVE_SESSIONS_KEY = 'surya_live_attending_sessions';
+export const LIVE_SESSIONS_KEY = 'surya_live_attending_sessions';
 
 /**
  * Retrieve all currently active live candidate sessions stored locally
@@ -497,6 +497,9 @@ export function saveLiveSessionToLocal(session: LiveCandidateSession): void {
       current.unshift(session);
     }
     localStorage.setItem(LIVE_SESSIONS_KEY, JSON.stringify(current));
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('surya_live_sessions_updated', { detail: current }));
+    }
   } catch (err) {
     console.warn('Could not save live session to local storage:', err);
   }
@@ -515,6 +518,9 @@ export function updateLiveSessionInLocal(
     if (idx >= 0) {
       current[idx] = { ...current[idx], ...updates };
       localStorage.setItem(LIVE_SESSIONS_KEY, JSON.stringify(current));
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('surya_live_sessions_updated', { detail: current }));
+      }
     }
   } catch {
     // ignore
@@ -528,6 +534,9 @@ export function deleteLiveSessionFromLocal(sessionId: string): void {
   try {
     const current = getLiveSessionsFromLocal().filter((s) => s.sessionId !== sessionId);
     localStorage.setItem(LIVE_SESSIONS_KEY, JSON.stringify(current));
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('surya_live_sessions_updated', { detail: current }));
+    }
   } catch {
     // ignore
   }
