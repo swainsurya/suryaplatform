@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { Exam, ExamSubmission, QuestionAnswer, ActiveExamSession, ProctoringViolation, LiveCandidateSession } from '../types/exam';
+import { Exam, Question, ExamSubmission, QuestionAnswer, ActiveExamSession, ProctoringViolation, LiveCandidateSession } from '../types/exam';
 import { 
   getExams, 
   saveExam as saveExamToLocal, 
@@ -555,7 +555,14 @@ export const useExamStore = create<ExamState>((set, get) => ({
     let wrongCount = 0;
     let skippedCount = 0;
 
-    const answersList: QuestionAnswer[] = completedExam.questions.map((q) => {
+    // Preserve the student's exact attempt order from activeTestSession
+    const orderedQuestionsToEvaluate: Question[] = (activeTestSession.orderedQuestions && activeTestSession.orderedQuestions.length > 0)
+      ? activeTestSession.orderedQuestions
+          .map(oq => completedExam.questions.find(q => q.id === oq.id))
+          .filter((q): q is Question => Boolean(q))
+      : completedExam.questions;
+
+    const answersList: QuestionAnswer[] = orderedQuestionsToEvaluate.map((q) => {
       const chosen = userAnswers[q.id] ?? null;
       const isUnanswered = chosen === null;
       const isCorrect = chosen !== null && chosen === q.correctOptionIndex;

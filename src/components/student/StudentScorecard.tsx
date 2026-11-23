@@ -12,7 +12,8 @@ import {
   AlertTriangle,
   ShieldAlert
 } from 'lucide-react';
-import { ExamSubmission, Exam } from '../../types/exam';
+import { ExamSubmission, Exam, Question, QuestionAnswer } from '../../types/exam';
+import { cleanQuestionStatement } from '../../services/examUtils';
 
 interface StudentScorecardProps {
   submission: ExamSubmission;
@@ -256,8 +257,19 @@ export const StudentScorecard: React.FC<StudentScorecardProps> = ({
         </div>
 
         <div className="space-y-4 sm:space-y-6">
-          {exam.questions.map((question, qIdx) => {
-            const answerRecord = submission.answers.find(a => a.questionId === question.id);
+          {/* Render in the exact order the student took the questions */}
+          {(submission.answers && submission.answers.length > 0
+            ? submission.answers
+                .map(ans => {
+                  const q = exam.questions.find(item => item.id === ans.questionId);
+                  return q ? { question: q, answerRecord: ans } : null;
+                })
+                .filter((entry): entry is { question: Question; answerRecord: QuestionAnswer } => Boolean(entry))
+            : exam.questions.map(q => ({
+                question: q,
+                answerRecord: submission.answers.find(a => a.questionId === q.id)
+              }))
+          ).map(({ question, answerRecord }, qIdx) => {
             const userChoiceIdx = answerRecord?.selectedOptionIndex ?? null;
             const isUnattempted = userChoiceIdx === null;
             const isCorrect = answerRecord?.isCorrect ?? false;
@@ -288,7 +300,7 @@ export const StudentScorecard: React.FC<StudentScorecardProps> = ({
                       {qIdx + 1}
                     </span>
                     <p className="font-bold text-slate-900 dark:text-white text-xs sm:text-sm leading-snug">
-                      {question.questionText}
+                      {cleanQuestionStatement(question.questionText)}
                     </p>
                   </div>
 

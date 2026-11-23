@@ -16,7 +16,8 @@ import {
   Camera,
   Maximize
 } from 'lucide-react';
-import { ExamSubmission, Exam } from '../../types/exam';
+import { ExamSubmission, Exam, Question, QuestionAnswer } from '../../types/exam';
+import { cleanQuestionStatement } from '../../services/examUtils';
 
 interface ScorecardDetailModalProps {
   submission: ExamSubmission;
@@ -277,8 +278,18 @@ export const ScorecardDetailModal: React.FC<ScorecardDetailModalProps> = ({
 
             {exam ? (
               <div className="space-y-3 sm:space-y-4">
-                {exam.questions.map((question, qIdx) => {
-                  const studentAns = submission.answers.find(a => a.questionId === question.id);
+                {(submission.answers && submission.answers.length > 0
+                  ? submission.answers
+                      .map(ans => {
+                        const q = exam.questions.find(item => item.id === ans.questionId);
+                        return q ? { question: q, studentAns: ans } : null;
+                      })
+                      .filter((entry): entry is { question: Question; studentAns: QuestionAnswer } => Boolean(entry))
+                  : exam.questions.map(q => ({
+                      question: q,
+                      studentAns: submission.answers.find(a => a.questionId === q.id)
+                    }))
+                ).map(({ question, studentAns }, qIdx) => {
                   const selectedIdx = studentAns?.selectedOptionIndex ?? null;
                   const isUnanswered = selectedIdx === null;
                   const isCorrect = studentAns?.isCorrect ?? false;
@@ -309,7 +320,7 @@ export const ScorecardDetailModal: React.FC<ScorecardDetailModalProps> = ({
                             {qIdx + 1}
                           </span>
                           <p className="font-semibold text-slate-900 dark:text-white leading-snug text-xs sm:text-sm">
-                            {question.questionText}
+                            {cleanQuestionStatement(question.questionText)}
                           </p>
                         </div>
 
