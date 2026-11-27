@@ -543,6 +543,80 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
     };
   }, [isProctored, activatePrivacyShield, handleProctorViolation]);
 
+  // Mobile Screen Wake Lock: prevent screen from auto-locking mid-exam
+  useEffect(() => {
+    if (!isProctored || typeof navigator === 'undefined' || !('wakeLock' in navigator)) return;
+
+    let wakeLockSentinel: WakeLockSentinel | null = null;
+    let isCancelled = false;
+
+    const acquireWakeLock = async () => {
+      if (isCancelled || submittedRef.current || isTerminatedRef.current) return;
+      try {
+        wakeLockSentinel = await navigator.wakeLock.request('screen');
+      } catch {
+        // Wake Lock may be rejected on low battery or unsupported browsers
+      }
+    };
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        acquireWakeLock();
+      }
+    };
+
+    acquireWakeLock();
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      isCancelled = true;
+      document.removeEventListener('visibilitychange', handleVisibility);
+      wakeLockSentinel?.release().catch(() => {});
+    };
+  }, [isProctored]);
+
+  // Mobile Split-Screen & Floating Window Detection
+  useEffect(() => {
+    if (!isProctored || !isMobile || typeof window === 'undefined') return;
+
+    let baselineWidth = window.innerWidth;
+    let baselineHeight = window.innerHeight;
+    let lastViolationAt = 0;
+
+    const checkSplitScreen = () => {
+      if (submittedRef.current || isTerminatedRef.current) return;
+
+      // Update baseline if device was rotated (larger dimension swapped)
+      const currentW = window.innerWidth;
+      const currentH = window.innerHeight;
+      if (currentW > baselineWidth && currentH > baselineHeight) {
+        baselineWidth = currentW;
+        baselineHeight = currentH;
+        return;
+      }
+
+      const widthShrank = currentW < baselineWidth * 0.78;
+      const heightShrank = currentH < baselineHeight * 0.65;
+
+      if (widthShrank || heightShrank) {
+        const now = Date.now();
+        if (now - lastViolationAt > 5000) {
+          lastViolationAt = now;
+          activatePrivacyShield('Split-screen or floating window mode is not permitted during a proctored exam.');
+          handleProctorViolation({
+            id: `viol-${now}`,
+            type: 'SPLIT_SCREEN_DETECTED',
+            message: 'Split-screen or resized floating browser window detected on mobile device.',
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+          });
+        }
+      }
+    };
+
+    window.addEventListener('resize', checkSplitScreen);
+    return () => window.removeEventListener('resize', checkSplitScreen);
+  }, [isProctored, isMobile, activatePrivacyShield, handleProctorViolation]);
+
   // Anti-Screenshot (PrtScn, Win+Shift+S, Cmd+Shift+3/4, Ctrl+P) Interception
   useEffect(() => {
     const handleScreenshotKeys = (e: KeyboardEvent) => {
@@ -850,7 +924,18 @@ export const ExamScreen: React.FC<ExamScreenProps> = ({
   const currentEliminated = currentQuestion ? (eliminatedOptions[currentQuestion.id] || []) : [];
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col transition-colors duration-200 exam-security-protected select-none relative">
+    <div
+      style={
+        isProctored
+          ? {
+              WebkitTouchCallout: 'none',
+              WebkitUserSelect: 'none',
+              overscrollBehaviorY: 'contain',
+            }
+          : undefined
+      }
+      className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col transition-colors duration-200 exam-security-protected select-none relative"
+    >
       
       {/* Background Anti-Leak Identification Watermark */}
       {isProctored && (

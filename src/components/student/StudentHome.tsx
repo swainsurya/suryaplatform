@@ -11,7 +11,7 @@ import {
   Lock,
   CheckCircle2
 } from 'lucide-react';
-import { Exam, RoomScanAngleSnapshot } from '../../types/exam';
+import { Exam } from '../../types/exam';
 import { useExamStore } from '../../store/useExamStore';
 import { WelcomeInstructionScreen } from './WelcomeInstructionScreen';
 import { getExamAttemptInfo, getExamScheduleInfo } from '../../services/examUtils';
@@ -21,7 +21,7 @@ import { normalizeExamCode } from '../../services/firebase';
 interface StudentHomeProps {
   exams: Exam[];
   initialExamCode?: string;
-  onStartExam: (exam: Exam, studentDetails: { name: string; rollNumber?: string; email?: string; roomScanSnapshots?: RoomScanAngleSnapshot[] }) => void;
+  onStartExam: (exam: Exam, studentDetails: { name: string; rollNumber?: string; email?: string }) => void;
   onGoToTeacher?: () => void;
 }
 

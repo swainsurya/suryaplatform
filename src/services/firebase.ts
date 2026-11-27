@@ -131,7 +131,6 @@ export function sanitizeExamForFirestore(exam: Exam): Record<string, any> {
     negativeMarking: Number(exam.negativeMarking) || 0,
     shuffleQuestions: Boolean(exam.shuffleQuestions),
     enableAiProctoring: Boolean(exam.enableAiProctoring),
-    enable360RoomScan: Boolean(exam.enable360RoomScan),
     maxViolationsAllowed: Number(exam.maxViolationsAllowed) || 3,
     createdAt: exam.createdAt || new Date().toISOString(),
     isActive: exam.isActive ?? true,
@@ -187,11 +186,6 @@ export function sanitizeSubmissionForFirestore(sub: ExamSubmission): Record<stri
       message: String(v.message || ''),
       timestamp: String(v.timestamp || ''),
       snapshotDataUrl: v.snapshotDataUrl ? String(v.snapshotDataUrl) : null,
-    })),
-    roomScanSnapshots: (sub.roomScanSnapshots || []).map(s => ({
-      angleLabel: String(s.angleLabel || ''),
-      capturedAt: String(s.capturedAt || ''),
-      snapshotDataUrl: String(s.snapshotDataUrl || ''),
     })),
     answers: (sub.answers || []).map(a => ({
       questionId: String(a.questionId),
@@ -600,15 +594,6 @@ export async function saveLiveSessionToFirebase(session: LiveCandidateSession): 
         lastViolationMessage: session.lastViolationMessage ? String(session.lastViolationMessage) : '',
         status: session.status || 'ONLINE',
         isTerminatedByTeacher: Boolean(session.isTerminatedByTeacher),
-        ...(session.roomScanSnapshots && session.roomScanSnapshots.length > 0
-          ? {
-              roomScanSnapshots: session.roomScanSnapshots.map(s => ({
-                angleLabel: String(s.angleLabel || ''),
-                capturedAt: String(s.capturedAt || ''),
-                snapshotDataUrl: String(s.snapshotDataUrl || ''),
-              })),
-            }
-          : {}),
       },
       { merge: true }
     );

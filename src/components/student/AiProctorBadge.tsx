@@ -5,12 +5,14 @@ import {
   Users, 
   AlertTriangle,
   GripHorizontal,
-  RotateCcw
+  RotateCcw,
+  Mic
 } from 'lucide-react';
 import { 
   FaceProctorController, 
   FaceDetectionStatus 
 } from '../../services/faceProctorService';
+import { AudioProctorController } from '../../services/audioProctorService';
 import { ProctoringViolation } from '../../types/exam';
 
 interface AiProctorBadgeProps {
@@ -30,9 +32,12 @@ export const AiProctorBadge: React.FC<AiProctorBadgeProps> = ({
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const controllerRef = useRef<FaceProctorController | null>(null);
+  const audioControllerRef = useRef<AudioProctorController | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
+  const [isMicActive, setIsMicActive] = useState<boolean>(false);
+  const [isSpeaking, setIsSpeaking] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [status, setStatus] = useState<FaceDetectionStatus>({
     isModelLoading: true,
@@ -184,18 +189,43 @@ export const AiProctorBadge: React.FC<AiProctorBadgeProps> = ({
 
   const initCamera = useCallback(async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          width: { ideal: 320 },
-          height: { ideal: 240 },
-          facingMode: 'user',
-        },
-        audio: false,
-      });
+      let stream: MediaStream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            width: { ideal: 320 },
+            height: { ideal: 240 },
+            facingMode: 'user',
+          },
+          audio: true,
+        });
+      } catch {
+        // Fallback to video-only if microphone is unavailable or denied
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            width: { ideal: 320 },
+            height: { ideal: 240 },
+            facingMode: 'user',
+          },
+          audio: false,
+        });
+      }
 
       streamRef.current = stream;
       setHasPermission(true);
       setErrorMessage('');
+
+      // Initialize Microphone Voice Activity Proctor if audio track is present
+      if (stream.getAudioTracks().length > 0 && !audioControllerRef.current) {
+        setIsMicActive(true);
+        audioControllerRef.current = new AudioProctorController({
+          stream,
+          onViolation,
+          onAudioLevel: (_level, speaking) => setIsSpeaking(speaking),
+        });
+      } else {
+        setIsMicActive(false);
+      }
 
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
@@ -231,6 +261,10 @@ export const AiProctorBadge: React.FC<AiProctorBadgeProps> = ({
       if (controllerRef.current) {
         controllerRef.current.destroy();
         controllerRef.current = null;
+      }
+      if (audioControllerRef.current) {
+        audioControllerRef.current.destroy();
+        audioControllerRef.current = null;
       }
       if (streamRef.current) {
         streamRef.current.getTracks().forEach((track) => track.stop());
@@ -285,6 +319,12 @@ export const AiProctorBadge: React.FC<AiProctorBadgeProps> = ({
               status.statusType === 'warning' ? 'bg-amber-400' : 'bg-emerald-400'
             }`} />
             <span className="font-semibold tracking-wide truncate">AI Proctor</span>
+            {isMicActive && (
+              <Mic
+                className={`w-3 h-3 shrink-0 ${isSpeaking ? 'text-amber-400 animate-pulse' : 'text-emerald-400'}`}
+                aria-label="Microphone voice monitoring active"
+              />
+            )}
           </div>
 
           <div className="flex items-center gap-1.5 shrink-0">

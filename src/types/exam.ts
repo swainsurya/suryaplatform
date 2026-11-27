@@ -26,7 +26,6 @@ export interface Exam {
   negativeMarking: number; // 0 or negative deduction e.g. 0.25
   shuffleQuestions: boolean;
   enableAiProctoring?: boolean;
-  enable360RoomScan?: boolean; // Require pre-exam 360° room scan when AI proctoring is enabled
   maxViolationsAllowed?: number; // default 3 before auto-termination
   createdAt: string;
   isActive: boolean;
@@ -54,13 +53,9 @@ export type ProctoringViolationType =
   | 'TAB_SWITCH'
   | 'FULLSCREEN_EXIT'
   | 'SCREENSHOT_ATTEMPT'
-  | 'SCREEN_RECORDING_DETECTED';
-
-export interface RoomScanAngleSnapshot {
-  angleLabel: string;
-  capturedAt: string;
-  snapshotDataUrl: string;
-}
+  | 'SCREEN_RECORDING_DETECTED'
+  | 'SPLIT_SCREEN_DETECTED'
+  | 'AUDIO_DETECTED';
 
 export interface ProctoringViolation {
   id: string;
@@ -95,7 +90,6 @@ export interface ExamSubmission {
   terminationReason?: string;
   violations?: ProctoringViolation[];
   totalViolations?: number;
-  roomScanSnapshots?: RoomScanAngleSnapshot[];
   answers: QuestionAnswer[];
 }
 
@@ -111,7 +105,6 @@ export interface ActiveExamSession {
   userAnswers: Record<string, number | null>; // Selected answers saved in real-time
   markedForReview: string[]; // Marked question IDs
   currentIndex: number; // Current question index
-  roomScanSnapshots?: RoomScanAngleSnapshot[]; // Pre-exam 360° room scan thumbnails
 }
 
 export interface LiveCandidateSession {
@@ -133,7 +126,6 @@ export interface LiveCandidateSession {
   lastViolationMessage?: string;
   status: 'ONLINE' | 'IDLE' | 'DISCONNECTED';
   isTerminatedByTeacher?: boolean;
-  roomScanSnapshots?: RoomScanAngleSnapshot[];
 }
 
 export interface TeacherUser {

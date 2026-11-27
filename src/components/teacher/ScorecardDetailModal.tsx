@@ -14,7 +14,9 @@ import {
   Eye,
   Users,
   Camera,
-  Maximize
+  Maximize,
+  Mic,
+  Columns2
 } from 'lucide-react';
 import { ExamSubmission, Exam, Question, QuestionAnswer } from '../../types/exam';
 import { cleanQuestionStatement } from '../../services/examUtils';
@@ -181,49 +183,6 @@ export const ScorecardDetailModal: React.FC<ScorecardDetailModalProps> = ({
             </div>
           </div>
 
-          {/* Pre-Exam 360° Room Scan Gallery */}
-          {submission.roomScanSnapshots && submission.roomScanSnapshots.length > 0 && (
-            <div className="space-y-2.5 p-3 sm:p-4 rounded-xl bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-200 dark:border-indigo-900/60">
-              <div className="flex items-center justify-between pb-2 border-b border-indigo-200/70 dark:border-indigo-900/50">
-                <div className="flex items-center gap-2">
-                  <Camera className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-                  <span className="font-bold text-xs sm:text-sm text-slate-900 dark:text-white">
-                    Pre-Exam 360° Room Scan ({submission.roomScanSnapshots.length} Angles)
-                  </span>
-                </div>
-                <span className="text-[10px] uppercase font-mono font-bold px-2 py-0.5 rounded bg-indigo-100 dark:bg-indigo-900/70 text-indigo-700 dark:text-indigo-300">
-                  Environment Check
-                </span>
-              </div>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                {submission.roomScanSnapshots.map((snap, idx) => (
-                  <button
-                    key={`${snap.angleLabel}-${idx}`}
-                    type="button"
-                    onClick={() => setEnlargedSnapshot(snap.snapshotDataUrl)}
-                    className="text-left rounded-lg overflow-hidden border border-indigo-200 dark:border-indigo-800 bg-white dark:bg-slate-900 hover:ring-2 hover:ring-indigo-500 transition-all cursor-pointer"
-                  >
-                    <div className="aspect-video bg-slate-900 overflow-hidden">
-                      <img
-                        src={snap.snapshotDataUrl}
-                        alt={snap.angleLabel}
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                    <div className="px-2 py-1">
-                      <span className="block text-[10px] font-bold text-slate-800 dark:text-slate-200 truncate">
-                        {snap.angleLabel}
-                      </span>
-                      <span className="block text-[9px] text-slate-400 font-mono">
-                        {snap.capturedAt}
-                      </span>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
           {/* AI Proctoring Audit Log & Photo Evidence */}
           {submission.violations && submission.violations.length > 0 && (
             <div className="space-y-2.5 p-3 sm:p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
@@ -259,6 +218,12 @@ export const ScorecardDetailModal: React.FC<ScorecardDetailModalProps> = ({
                   } else if (violation.type === 'FULLSCREEN_EXIT') {
                     badgeColor = 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300';
                     icon = <Maximize className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />;
+                  } else if (violation.type === 'AUDIO_DETECTED') {
+                    badgeColor = 'bg-fuchsia-100 text-fuchsia-800 dark:bg-fuchsia-950 dark:text-fuchsia-300';
+                    icon = <Mic className="w-3.5 h-3.5 text-fuchsia-600 dark:text-fuchsia-400" />;
+                  } else if (violation.type === 'SPLIT_SCREEN_DETECTED') {
+                    badgeColor = 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300';
+                    icon = <Columns2 className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400" />;
                   }
 
                   return (

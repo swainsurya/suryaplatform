@@ -25,8 +25,7 @@ import {
   Users,
   Lock
 } from 'lucide-react';
-import { Exam, RoomScanAngleSnapshot } from '../../types/exam';
-import { PreExam360Scan } from './PreExam360Scan';
+import { Exam } from '../../types/exam';
 import { isMobileDevice } from '../../services/deviceUtils';
 import { useExamStore } from '../../store/useExamStore';
 import { getExamAttemptInfo, getExamScheduleInfo } from '../../services/examUtils';
@@ -39,12 +38,7 @@ interface WelcomeInstructionScreenProps {
     rollNumber?: string;
     email?: string;
   };
-  onProceedToExam: (details: {
-    name: string;
-    rollNumber?: string;
-    email?: string;
-    roomScanSnapshots?: RoomScanAngleSnapshot[];
-  }) => void;
+  onProceedToExam: (details: { name: string; rollNumber?: string; email?: string }) => void;
   onCancel: () => void;
 }
 
@@ -69,11 +63,9 @@ export const WelcomeInstructionScreen: React.FC<WelcomeInstructionScreenProps> =
 
   // Camera Permission & System Check State
   const isProctored = exam.enableAiProctoring === true;
-  const requires360Scan = isProctored && exam.enable360RoomScan === true;
   const [cameraStatus, setCameraStatus] = useState<'pending' | 'checking' | 'granted' | 'denied'>('pending');
+  const [micGranted, setMicGranted] = useState<boolean>(false);
   const [cameraError, setCameraError] = useState<string>('');
-  const [roomScanSnapshots, setRoomScanSnapshots] = useState<RoomScanAngleSnapshot[]>([]);
-  const is360ScanComplete = !requires360Scan || roomScanSnapshots.length >= 4;
   const previewVideoRef = useRef<HTMLVideoElement | null>(null);
   const previewStreamRef = useRef<MediaStream | null>(null);
 
@@ -83,14 +75,29 @@ export const WelcomeInstructionScreen: React.FC<WelcomeInstructionScreenProps> =
     setCameraStatus('checking');
     setCameraError('');
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: 'user',
-          width: { ideal: 320 },
-          height: { ideal: 240 },
-        },
-        audio: false,
-      });
+      let stream: MediaStream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: 'user',
+            width: { ideal: 320 },
+            height: { ideal: 240 },
+          },
+          audio: true,
+        });
+        setMicGranted(stream.getAudioTracks().length > 0);
+      } catch {
+        // Fallback to video-only if microphone is unavailable or denied
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: 'user',
+            width: { ideal: 320 },
+            height: { ideal: 240 },
+          },
+          audio: false,
+        });
+        setMicGranted(false);
+      }
 
       previewStreamRef.current = stream;
       setCameraStatus('granted');
@@ -160,11 +167,6 @@ export const WelcomeInstructionScreen: React.FC<WelcomeInstructionScreenProps> =
       return;
     }
 
-    if (requires360Scan && !is360ScanComplete) {
-      setNameError('Please complete the Pre-Exam 360° Room Scan (all 4 angles) before starting the exam.');
-      return;
-    }
-
     // Stop preview stream so ExamScreen can take over camera cleanly
     if (previewStreamRef.current) {
       previewStreamRef.current.getTracks().forEach((track) => track.stop());
@@ -188,7 +190,6 @@ export const WelcomeInstructionScreen: React.FC<WelcomeInstructionScreenProps> =
       name: name.trim(),
       rollNumber: roll.trim() || undefined,
       email: email.trim() || undefined,
-      roomScanSnapshots: requires360Scan ? roomScanSnapshots : undefined,
     });
   };
 
@@ -470,40 +471,30 @@ export const WelcomeInstructionScreen: React.FC<WelcomeInstructionScreenProps> =
 
           {/* Camera Preview / Activation State */}
           {cameraStatus === 'granted' ? (
-            <>
-              <div className="flex flex-col sm:flex-row items-center gap-4 p-3.5 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700">
-                <div className="relative w-40 h-30 bg-black rounded-lg overflow-hidden shrink-0 border border-emerald-500/50 shadow-inner">
-                  <video
-                    ref={previewVideoRef}
-                    autoPlay
-                    playsInline
-                    muted
-                    className="w-full h-full object-cover -scale-x-100"
-                  />
-                  <div className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded bg-emerald-600 text-white text-[9px] font-bold flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
-                    <span>Live Feed</span>
-                  </div>
-                </div>
-                <div className="space-y-1 text-center sm:text-left">
-                  <h4 className="font-bold text-xs text-slate-900 dark:text-white">Camera is operating properly</h4>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
-                    Your face is centered in the feed. The AI vision system will continuously monitor for single-candidate focus during the exam.
-                  </p>
-                  <span className="inline-block text-[10px] text-emerald-600 dark:text-emerald-400 font-bold">
-                    ✓ {requires360Scan && !is360ScanComplete ? 'Camera ready — complete 360° room scan below' : 'Ready to proceed to exam'}
-                  </span>
+            <div className="flex flex-col sm:flex-row items-center gap-4 p-3.5 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700">
+              <div className="relative w-40 h-30 bg-black rounded-lg overflow-hidden shrink-0 border border-emerald-500/50 shadow-inner">
+                <video
+                  ref={previewVideoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  className="w-full h-full object-cover -scale-x-100"
+                />
+                <div className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded bg-emerald-600 text-white text-[9px] font-bold flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                  <span>Live Feed</span>
                 </div>
               </div>
-
-              {requires360Scan && (
-                <PreExam360Scan
-                  videoStream={previewStreamRef.current}
-                  snapshots={roomScanSnapshots}
-                  onSnapshotsChange={setRoomScanSnapshots}
-                />
-              )}
-            </>
+              <div className="space-y-1 text-center sm:text-left">
+                <h4 className="font-bold text-xs text-slate-900 dark:text-white">Camera is operating properly</h4>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                  Your face is centered in the feed. The AI vision system will continuously monitor for single-candidate focus during the exam.
+                </p>
+                <span className="inline-block text-[10px] text-emerald-600 dark:text-emerald-400 font-bold">
+                  ✓ {micGranted ? 'Camera & Microphone verified — ready to proceed' : 'Camera ready — proceed to exam'}
+                </span>
+              </div>
+            </div>
           ) : cameraStatus === 'denied' ? (
             <div className="p-3.5 bg-red-50 dark:bg-red-950/40 rounded-xl border border-red-200 dark:border-red-900/60 space-y-2">
               <div className="flex items-start gap-2.5 text-red-900 dark:text-red-200 text-xs">
@@ -868,18 +859,11 @@ export const WelcomeInstructionScreen: React.FC<WelcomeInstructionScreenProps> =
               }`}
             >
               {(!isProctored || cameraStatus === 'granted') ? (
-                requires360Scan && !is360ScanComplete ? (
-                  <>
-                    <Camera className="w-4 h-4" />
-                    <span>Complete 360° Room Scan ({roomScanSnapshots.length}/4)</span>
-                  </>
-                ) : (
-                  <>
-                    <Zap className="w-4 h-4 fill-current" />
-                    <span>Start Exam</span>
-                    <ArrowRight className="w-4 h-4 stroke-[2.5]" />
-                  </>
-                )
+                <>
+                  <Zap className="w-4 h-4 fill-current" />
+                  <span>Start Exam</span>
+                  <ArrowRight className="w-4 h-4 stroke-[2.5]" />
+                </>
               ) : (
                 <>
                   <Camera className="w-4 h-4" />
