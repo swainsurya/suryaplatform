@@ -11,16 +11,17 @@ import {
   Lock,
   CheckCircle2
 } from 'lucide-react';
-import { Exam } from '../../types/exam';
+import { Exam, RoomScanAngleSnapshot } from '../../types/exam';
 import { useExamStore } from '../../store/useExamStore';
 import { WelcomeInstructionScreen } from './WelcomeInstructionScreen';
 import { getExamAttemptInfo, getExamScheduleInfo } from '../../services/examUtils';
 import { isExamAttemptedOnDevice, getDeviceExamAttempt } from '../../services/storage';
+import { normalizeExamCode } from '../../services/firebase';
 
 interface StudentHomeProps {
   exams: Exam[];
   initialExamCode?: string;
-  onStartExam: (exam: Exam, studentDetails: { name: string; rollNumber?: string; email?: string }) => void;
+  onStartExam: (exam: Exam, studentDetails: { name: string; rollNumber?: string; email?: string; roomScanSnapshots?: RoomScanAngleSnapshot[] }) => void;
   onGoToTeacher?: () => void;
 }
 
@@ -95,7 +96,12 @@ export const StudentHome: React.FC<StudentHomeProps> = ({
     if (!targetExam) {
       const cleanCode = examCodeInput.trim();
       if (!cleanCode) {
-        setError('Please enter an Exam Code.');
+        setError('Please enter a valid exam code.');
+        return;
+      }
+
+      if (/^https?:\/\//i.test(cleanCode) && !normalizeExamCode(cleanCode)) {
+        setError('The entered link does not contain an exam code. Please provide an exam link with ?exam=CODE or enter your code directly.');
         return;
       }
 

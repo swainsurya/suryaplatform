@@ -612,6 +612,30 @@ export const LiveAttendanceMonitor: React.FC = () => {
                   <strong>Latest Violation:</strong> {selectedCandidateDetail.lastViolationMessage}
                 </div>
               )}
+              {selectedCandidateDetail.roomScanSnapshots && selectedCandidateDetail.roomScanSnapshots.length > 0 && (
+                <div className="pt-2 space-y-2">
+                  <span className="text-xs font-bold text-slate-700 dark:text-slate-300 block">
+                    Pre-Exam 360° Room Scan ({selectedCandidateDetail.roomScanSnapshots.length} Angles)
+                  </span>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    {selectedCandidateDetail.roomScanSnapshots.map((snap, idx) => (
+                      <div
+                        key={`${snap.angleLabel}-${idx}`}
+                        className="rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                      >
+                        <img
+                          src={snap.snapshotDataUrl}
+                          alt={snap.angleLabel}
+                          className="w-full aspect-video object-cover bg-slate-900"
+                        />
+                        <span className="block px-1.5 py-1 text-[10px] font-semibold text-slate-700 dark:text-slate-300 truncate">
+                          {snap.angleLabel}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="mt-6 flex justify-end">

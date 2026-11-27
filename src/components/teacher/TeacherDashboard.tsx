@@ -120,9 +120,9 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
   };
 
   const getExamLink = (code: string) => {
-    const origin = window.location.origin;
-    const path = window.location.pathname;
-    return `${origin}${path}?exam=${code}`;
+    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    const baseUrl = isLocalhost ? 'https://suryaplatform.vercel.app' : window.location.origin;
+    return `${baseUrl}/?exam=${encodeURIComponent(code)}`;
   };
 
   const handleCopyLink = (code: string) => {

@@ -1,0 +1,143 @@
+export interface Question {
+  id: string;
+  questionText: string;
+  options: string[]; // Typically 4 options [A, B, C, D]
+  correctOptionIndex: number; // 0 for A, 1 for B, 2 for C, 3 for D
+  explanation?: string;
+  marks: number;
+}
+
+export interface SanitizedQuestion {
+  id: string;
+  questionText: string;
+  options: string[];
+  marks: number;
+}
+
+export interface Exam {
+  id: string;
+  code: string; // e.g. "SURYA-8291"
+  title: string;
+  description: string;
+  subject: string;
+  durationMinutes: number;
+  totalMarks: number;
+  passingPercentage: number;
+  negativeMarking: number; // e.g. 0.25
+  shuffleQuestions?: boolean;
+  enableAiProctoring?: boolean;
+  maxViolationsAllowed?: number;
+  createdAt?: string;
+  isActive?: boolean;
+  isEnded?: boolean;
+  endedAt?: string;
+  startTime?: string; // Scheduled start date/time (ISO or YYYY-MM-DDTHH:mm)
+  endTime?: string; // Scheduled end date/time (ISO or YYYY-MM-DDTHH:mm)
+  maxCandidates?: number; // Maximum candidate attempts / available sheets
+  attemptedCount?: number; // Count of candidates who have started/attempted the exam
+  singleAttemptOnly?: boolean; // Restrict candidate to only 1 attempt per device
+  questions: Question[];
+}
+
+export interface QuestionAnswer {
+  questionId: string;
+  selectedOptionIndex: number | null; // null if skipped / unattempted
+  isCorrect: boolean;
+  marksAwarded: number;
+}
+
+export type ProctoringViolationType =
+  | 'NO_FACE'
+  | 'MULTIPLE_FACES'
+  | 'LOOKING_AWAY'
+  | 'TAB_SWITCH'
+  | 'FULLSCREEN_EXIT'
+  | 'SCREENSHOT_ATTEMPT'
+  | 'SCREEN_RECORDING_DETECTED';
+
+export interface ProctoringViolation {
+  id: string;
+  type: ProctoringViolationType | string;
+  message: string;
+  timestamp: string;
+  snapshotDataUrl?: string;
+}
+
+export interface ExamSubmission {
+  id: string;
+  examId: string;
+  examCode: string;
+  examTitle: string;
+  studentName: string;
+  studentRollNumber?: string;
+  studentEmail?: string;
+  startedAt?: string;
+  submittedAt: string;
+  timeTakenSeconds: number;
+  totalQuestions: number;
+  attemptedCount: number;
+  correctCount: number;
+  wrongCount: number;
+  skippedCount: number;
+  totalScore: number;
+  maxScore: number;
+  percentage: number;
+  isPassed: boolean;
+  isEndedByTeacher?: boolean;
+  isTerminatedByProctor?: boolean;
+  terminationReason?: string;
+  violations?: ProctoringViolation[];
+  totalViolations?: number;
+  violationsCount?: number;
+  answers: QuestionAnswer[];
+}
+
+export interface LiveCandidateSession {
+  sessionId: string;
+  examId: string;
+  examCode: string;
+  examTitle: string;
+  studentName: string;
+  studentRollNumber?: string;
+  studentEmail?: string;
+  startedAt: string;
+  lastHeartbeat: number | string;
+  timeRemainingSeconds: number;
+  currentIndex: number;
+  totalQuestions: number;
+  answeredCount: number;
+  markedForReviewCount: number;
+  violationsCount: number;
+  lastViolationMessage?: string;
+  status?: 'ONLINE' | 'WARNING' | 'TERMINATED' | 'DISCONNECTED';
+  isTerminatedByTeacher?: boolean;
+}
+
+export interface ActiveExamSession {
+  sessionId?: string;
+  exam: Exam;
+  studentName: string;
+  studentRollNumber?: string;
+  studentEmail?: string;
+  examStartTime: number;
+  examEndTime: number;
+  orderedQuestions: SanitizedQuestion[];
+  userAnswers: Record<string, number | null>;
+  markedForReview: string[];
+  currentIndex: number;
+}
+
+export interface DeviceExamAttemptRecord {
+  submissionId: string;
+  submittedAt: string;
+  examCode?: string;
+  studentName?: string;
+}
+
+export interface StudentProfile {
+  name: string;
+  rollNumber: string;
+  email: string;
+  department: string;
+  avatarUrl?: string;
+}

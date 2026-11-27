@@ -1,0 +1,43 @@
+{
+  "expo": {
+    "name": "ExamPrep",
+    "slug": "examprep",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.surya.examprep",
+      "infoPlist": {
+        "NSCameraUsageDescription": "ExamPrep uses the camera for secure student identity check and live proctoring during assessments."
+      }
+    },
+    "android": {
+      "package": "com.surya.examprep",
+      "adaptiveIcon": {
+        "backgroundColor": "#0F172A",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png"
+      },
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.VIBRATE"
+      ],
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-font",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "ExamPrep requires camera access for AI Proctoring and QR Code scanning."
+        }
+      ],
+      "react-native-fast-tflite"
+    ]
+  }
+}

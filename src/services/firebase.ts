@@ -131,6 +131,7 @@ export function sanitizeExamForFirestore(exam: Exam): Record<string, any> {
     negativeMarking: Number(exam.negativeMarking) || 0,
     shuffleQuestions: Boolean(exam.shuffleQuestions),
     enableAiProctoring: Boolean(exam.enableAiProctoring),
+    enable360RoomScan: Boolean(exam.enable360RoomScan),
     maxViolationsAllowed: Number(exam.maxViolationsAllowed) || 3,
     createdAt: exam.createdAt || new Date().toISOString(),
     isActive: exam.isActive ?? true,
@@ -186,6 +187,11 @@ export function sanitizeSubmissionForFirestore(sub: ExamSubmission): Record<stri
       message: String(v.message || ''),
       timestamp: String(v.timestamp || ''),
       snapshotDataUrl: v.snapshotDataUrl ? String(v.snapshotDataUrl) : null,
+    })),
+    roomScanSnapshots: (sub.roomScanSnapshots || []).map(s => ({
+      angleLabel: String(s.angleLabel || ''),
+      capturedAt: String(s.capturedAt || ''),
+      snapshotDataUrl: String(s.snapshotDataUrl || ''),
     })),
     answers: (sub.answers || []).map(a => ({
       questionId: String(a.questionId),
@@ -257,20 +263,36 @@ export function normalizeExamCode(rawInput: string): string {
   if (!rawInput) return '';
   let str = String(rawInput).trim();
 
-  // If a full URL or query string was pasted (e.g. ?exam=EXAM-6724 or https://site/?exam=6724)
-  if (str.includes('exam=') || str.includes('examId=')) {
+  // If a full URL or query string was pasted / scanned (e.g. ?exam=EXAM-6724 or https://site/?exam=6724)
+  if (str.includes('http://') || str.includes('https://') || str.includes('?') || str.includes('&') || str.includes('exam') || str.includes('code')) {
     try {
-      const match = str.match(/[?&](?:exam|examId)=([^&#\s]+)/i);
-      if (match && match[1]) {
-        str = decodeURIComponent(match[1]).trim();
+      // 1. Check query parameter: exam, examId, code, test
+      const queryMatch = str.match(/[?&](?:exam|examId|code|test|exam_code)=([^&#\s]+)/i);
+      if (queryMatch && queryMatch[1]) {
+        str = decodeURIComponent(queryMatch[1]).trim();
+      } else {
+        // 2. Check path segments like /exam/EXAM-1234 or /test/EXAM-1234
+        const pathMatch = str.match(/(?:\/exam|\/test|\/code)\/([^/?&#\s]+)/i);
+        if (pathMatch && pathMatch[1]) {
+          str = decodeURIComponent(pathMatch[1]).trim();
+        } else if (/^https?:\/\//i.test(str) || /^[a-z0-9-]+\.(?:vercel\.app|netlify\.app|com|org|io)/i.test(str)) {
+          // It's a bare URL or domain without any exam code parameter
+          return '';
+        }
       }
     } catch {
       // fallback
     }
   }
 
-  // Remove leading/trailing symbols, quotes, hashes
-  str = str.replace(/^["'#]+|["'#]+$/g, '').trim();
+  // Remove leading/trailing symbols, quotes, hashes, slashes
+  str = str.replace(/^["'#/\\]+|["'#/\\]+$/g, '').trim();
+
+  // If the string still looks like a URL or domain, it is not an exam code
+  if (/^https?:\/\//i.test(str) || str.includes('vercel.app') || str.includes('.com') || str.includes('/')) {
+    return '';
+  }
+
   return str.toUpperCase();
 }
 
@@ -578,6 +600,15 @@ export async function saveLiveSessionToFirebase(session: LiveCandidateSession): 
         lastViolationMessage: session.lastViolationMessage ? String(session.lastViolationMessage) : '',
         status: session.status || 'ONLINE',
         isTerminatedByTeacher: Boolean(session.isTerminatedByTeacher),
+        ...(session.roomScanSnapshots && session.roomScanSnapshots.length > 0
+          ? {
+              roomScanSnapshots: session.roomScanSnapshots.map(s => ({
+                angleLabel: String(s.angleLabel || ''),
+                capturedAt: String(s.capturedAt || ''),
+                snapshotDataUrl: String(s.snapshotDataUrl || ''),
+              })),
+            }
+          : {}),
       },
       { merge: true }
     );

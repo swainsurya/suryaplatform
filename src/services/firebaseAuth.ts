@@ -283,9 +283,14 @@ export function formatAuthError(error: any): string {
       return 'Too many failed attempts. Please try again in a few moments.';
     case 'auth/user-disabled':
       return 'This teacher account has been disabled.';
+    case 'auth/unauthorized-domain':
+      return 'The domain "suryaplatform.vercel.app" is not authorized for Google Sign-In in Firebase. Please add suryaplatform.vercel.app to Firebase Console > Authentication > Settings > Authorized domains.';
     default:
       if (message.includes('operation-not-allowed')) {
         return 'Google provider is not enabled in Firebase Console. Please enable Google in Firebase Console > Authentication > Sign-in method.';
+      }
+      if (message.includes('unauthorized-domain')) {
+        return 'The domain "suryaplatform.vercel.app" is not authorized in Firebase Console. Please add suryaplatform.vercel.app to Firebase Console > Authentication > Settings > Authorized domains.';
       }
       return message;
   }

@@ -34,11 +34,12 @@ export function App() {
     const urlParams = new URLSearchParams(window.location.search);
     const examParam = urlParams.get('exam') || urlParams.get('examId') || urlParams.get('code');
     const viewParam = urlParams.get('view') || urlParams.get('portal');
+    const pathname = window.location.pathname.toLowerCase();
 
     if (examParam) {
       setUrlExamCode(examParam.toUpperCase());
       setCurrentView('student');
-    } else if (viewParam === 'teacher' && isTeacherAuth) {
+    } else if (viewParam === 'teacher' || pathname.startsWith('/teacher')) {
       setCurrentView('teacher');
     }
   }, []);

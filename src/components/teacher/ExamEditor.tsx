@@ -69,6 +69,9 @@ export const ExamEditor: React.FC<ExamEditorProps> = ({
   const [enableAiProctoring, setEnableAiProctoring] = useState<boolean>(
     initialExam ? Boolean(initialExam.enableAiProctoring) : false
   );
+  const [enable360RoomScan, setEnable360RoomScan] = useState<boolean>(
+    initialExam ? Boolean(initialExam.enable360RoomScan) : false
+  );
   const [maxViolationsAllowed, setMaxViolationsAllowed] = useState<number>(
     initialExam?.maxViolationsAllowed ?? 3
   );
@@ -154,6 +157,7 @@ export const ExamEditor: React.FC<ExamEditorProps> = ({
       negativeMarking: Number(negativeMarking),
       shuffleQuestions,
       enableAiProctoring,
+      enable360RoomScan: enableAiProctoring ? enable360RoomScan : false,
       maxViolationsAllowed: Number(maxViolationsAllowed),
       startTime: startTime ? new Date(startTime).toISOString() : undefined,
       endTime: endTime ? new Date(endTime).toISOString() : undefined,
@@ -557,6 +561,21 @@ export const ExamEditor: React.FC<ExamEditorProps> = ({
                       <option value={5}>5 Strikes (Lenient)</option>
                       <option value={999}>Unlimited (Log violations only, no auto-termination)</option>
                     </select>
+
+                    <label className="flex items-start gap-2 pt-2 mt-2 border-t border-slate-200 dark:border-slate-700 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={enable360RoomScan}
+                        onChange={(e) => setEnable360RoomScan(e.target.checked)}
+                        className="mt-0.5 w-3.5 h-3.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                      />
+                      <span className="text-[11px] leading-snug text-slate-700 dark:text-slate-300">
+                        <strong className="block text-slate-900 dark:text-white">Require Pre-Exam 360° Room Scan</strong>
+                        <span className="text-[10px] text-slate-500 dark:text-slate-400">
+                          Candidates must pan their webcam 360° around their desk & room before starting.
+                        </span>
+                      </span>
+                    </label>
                   </div>
                 )}
               </div>

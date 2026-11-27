@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { Exam, Question, ExamSubmission, QuestionAnswer, ActiveExamSession, ProctoringViolation, LiveCandidateSession, TeacherUser } from '../types/exam';
+import { Exam, Question, ExamSubmission, QuestionAnswer, ActiveExamSession, ProctoringViolation, LiveCandidateSession, TeacherUser, RoomScanAngleSnapshot } from '../types/exam';
 import { 
   getExams, 
   saveExam as saveExamToLocal, 
@@ -92,7 +92,7 @@ interface ExamState {
   setTeacherUser: (user: TeacherUser | null) => void;
   loginTeacher: (user?: TeacherUser) => void;
   logoutTeacher: () => Promise<void>;
-  startExam: (exam: Exam, studentDetails: { name: string; rollNumber?: string; email?: string }) => void;
+  startExam: (exam: Exam, studentDetails: { name: string; rollNumber?: string; email?: string; roomScanSnapshots?: RoomScanAngleSnapshot[] }) => void;
   updateExamProgress: (updates: { userAnswers?: Record<string, number | null>; markedForReview?: string[]; currentIndex?: number }) => void;
   sendLiveHeartbeat: (updates: Partial<LiveCandidateSession>) => Promise<void>;
   terminateLiveCandidateByTeacher: (sessionId: string) => Promise<void>;
@@ -442,6 +442,7 @@ export const useExamStore = create<ExamState>((set, get) => ({
       userAnswers: {},
       markedForReview: [],
       currentIndex: 0,
+      roomScanSnapshots: details.roomScanSnapshots,
     };
 
     saveActiveExamSession(session);
@@ -465,6 +466,7 @@ export const useExamStore = create<ExamState>((set, get) => ({
       currentIndex: 0,
       violationsCount: 0,
       isTerminatedByTeacher: false,
+      roomScanSnapshots: details.roomScanSnapshots,
     };
     saveLiveSessionToLocal(initialLiveSession);
     saveLiveSessionToFirebase(initialLiveSession);
@@ -654,6 +656,7 @@ export const useExamStore = create<ExamState>((set, get) => ({
       terminationReason: proctoringData?.terminationReason,
       violations: proctoringData?.violations || [],
       totalViolations: proctoringData?.violations?.length || 0,
+      roomScanSnapshots: activeTestSession.roomScanSnapshots,
       answers: answersList,
     };
 
